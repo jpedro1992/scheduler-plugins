@@ -689,9 +689,9 @@ spec:
     image: example
     resources:
       requests:
-        networkAware.com/bandwidth: 10000000 # 10M
+        network.aware.com/bandwidth: 10000000 # 10M
       limits:
-        networkAware.com/bandwidth: 10000000 # 10M  
+        network.aware.com/bandwidth: 10000000 # 10M  
  ``` 
 
 This allows to perform filter / score algorithms (e.g., `PodFitsHostResources`, `MostRequested`, `BalancedAllocation`) based on bandwidth resources.
@@ -762,8 +762,6 @@ Each of the two added terms is bounded between 0 and 1. Then, dividing by 2 norm
 Then, if the **node_risk** is higher than the `RiskThreshold` defined in the scheduler config file, the node is removed and not considered for scoring. 
 
 ```go
-package CheckRiskNodebandwidth
-
 func (rs *resourceStats) evaluateRisk(margin float64, sensitivity float64, riskThreshold float64) bool {
     
     // make sure values are within bounds
