@@ -15,12 +15,12 @@
 - [Proposal - Design & Implementation Details](#proposal---design--implementation-details)
   - [Overview of the System Design](#overview-of-the-system-design)
   - [Application Group CRD (AppGroup)](#application-group-crd-appgroup)
-  - [Network Topology CRD (NetTopology)](#network-topology-crd-nettopology)
+  - [Network Topology CRD (NetTopology)](#network-topology-crd-networktopology)
   - [The inclusion of bandwidth in the scheduling process](#the-inclusion-of-bandwidth-in-the-scheduling-process)
     - [Bandwidth Requests via extended resources](#bandwidth-requests-via-extended-resources)
     - [Bandwidth Limitations via the Bandwidth CNI plugin](#bandwidth-limitations-via-the-bandwidth-cni-plugin)
   - [Netperf component](#netperf-component---measuring-latency-in-the-cluster)  
-  - [Filter and Score plugins](#filter-and-score-plugins)
+  - [Plugins](#plugins)
     - [Description of the `NetworkMinCost` Algorithm](#description-of-the-networkmincost-algorithm)
 - [Known limitations](#known-limitations)
 - [Test plans](#test-plans)
@@ -37,8 +37,12 @@
 
 # Summary
 
-This document describes the behaviour of the Network-Aware Scheduling plugin 
+This document describes the behaviour of the Network-Aware Scheduling framework 
 that considers latency and bandwidth in the scheduling decision making process.
+Service topology information (e.g., Pod dependencies) is established via an **AppGroup CRD**, 
+while network topology information (e.g., network weights) is provided through a **NetworkTopology CRD**.
+Bandwidth resources are advertised as **extended resources**. Several plugins are planned including: 
+`TopologicalSort`, `CheckRiskNodebandwidth` and `NetworkMinCost`.  
 
 # Motivation
 
@@ -54,23 +58,27 @@ The best strategy is to reduce the latency between services belonging to the sam
 This work is inspired by [Service Function Chaining](https://www.sciencedirect.com/science/article/pii/S1084804516301989).
 Also, bandwidth plays an important role since overloaded nodes would degrade performance. 
 
-We propose a **Network-Aware plugin** for Kubernetes focused on delivering low latency to end-users 
+We propose a **Network-Aware framework** for Kubernetes focused on delivering low latency to end-users 
 and ensuring bandwidth conservation during pod allocations. 
 
 This work significantly extends the previous work open-sourced [here](https://github.com/jpedro1992/sfc-controller) based on the old scheduler extender process.  
 
 ## Goals
 
-- Provide a network-aware plugin to extend scheduling features of Kubernetes by considering latency and bandwidth.
-- The creation of an **Application Group (AppGroup) CRD**:
-    - consider different pods as an AppGroup.
-- The creation of a **Network Topology (NetTopology) CRD**: 
-    - map the cluster infrastructure into zones / nodes. 
+- Provide a network-aware framework to extend scheduling features of Kubernetes by considering latency and bandwidth.
+- Consider different pods as an Application:    
+    - The creation of an **Application Group (AppGroup) CRD**
+- Mapping the cluster infrastructure into zones and nodes:
+    - The creation of a **Network Topology (NetworkTopology) CRD**: 
+- Establish a specific order to allocate Pods based on their AppGroup CRD.
+    - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering.)
 - The advertising of the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/): 
-    - bandwidth requests and limitations allow to filter overloaded nodes (bandwdith) considered for scheduling.
+    - bandwidth requests and limitations allow to filter overloaded nodes (bandwidth) considered for scheduling.
     - consider bandwidth requests for scoring plugins (e.g., `MostRequested`, `BalancedAllocation`) 
+- Evaluate the risk of allocating pods on nodes based on their current demand (network bandwidth).
+    - Implementation of a **Filter** plugin based on the [Trimaran load-aware scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).    
 - Near-optimal scheduling decisions based on latency:
-    - Implementation of **Filter** and **Score** plugins for network-aware scheduling.
+    - Implementation of **Score** plugins based on the [Dijkstra Shortest Path calculation](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/).
 
 ## Non-Goals
 
@@ -86,23 +94,27 @@ We believe that our plugin finds the best nodes for pod allocations concerning l
 
 ### 1 - Cluster 
 
-Even small cluster topologies benefit from our scheduler, especially when response times are different. Network weights will be different among the nodes present in the cluster.
-If latency or bandwidth are not considered in the scheduling process, 
-pods from the same application might be allocated far from each other, or pods might be allocated on overloaded nodes, causing performance degradation. 
+Even small cluster topologies benefit from our plugins. 
+Network weights can be different among the nodes in the infrastructure, impacting the application's response time. 
+If latency or bandwidth are not considered in the scheduling process, pods from the same application can be allocated 
+far from each other, increasing response time. 
+Or even pods can be allocated on overloaded nodes (i.e., high incoming traffic), causing performance degradation. 
  
 ![cluster](figs/cluster.png)
 
 ### 2 - Data Center (DC)
 
-DC topologies should provide high scalability and low latency. Latency is a critical requirement for several applications (e.g., financial, [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
-Also, bandwidth plays an important role since pods might be allocated in the same zone, and there is not enough bandwidth for all pods since bandwidth has not been considered in the scheduling process.
+
+DC topologies should provide high scalability and low latency. 
+Latency is a critical requirement for several applications (e.g., financial, [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
+Also, bandwidth plays an important role since pods can be allocated in the same zone when there is not enough bandwidth for the proper operation of all pods.
 
 ![datacenter](figs/data_center.png)
 
 
 ### 3 - Multi-Region
 
-Multi-region or Geo-distributed scenarios benefit the most from our plugin. 
+Multi-region or Geo-distributed scenarios benefit the most from our plugins. 
 High latency is a big concern in these topologies, especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/))
 
 ![multiregion](figs/multi_region.png)
@@ -112,7 +124,7 @@ High latency is a big concern in these topologies, especially for IoT applicatio
 Efficient pod allocations depend on the infrastructure topology and correspondent resources. 
 Available bandwidth capacity and network delays must be considered in the scheduling process.
 In this work, we are concerned about microservice dependencies inspired by Service Function Chaining. 
-Different Pods have established connections that directly impact the application's performance. 
+An application is composed of different pods with established connections that directly impact the application's performance. 
 
 For example, in the Redis cluster application, there are several dependencies among the masters and the slaves:
 
@@ -123,90 +135,168 @@ Also, in the Cloud2Edge platform, there are several dependencies among the sever
 ![cloud2edge](figs/cloud2edge.png)
 
 The following sections describe the main ideas and implementation details to establish service chaining in Kubernetes 
-and consider bandwidth and latency in the scheduling process in Kubernetes.
+and consider bandwidth and latency in the scheduling process.
 
 # Proposal - Design & Implementation details
 
 ## Overview of the System Design
 
-As an initial design, we plan to implement a scoring function called `NetworkMinCost`. 
-The goal is to score nodes based on their network weight ensuring network latency is 
+As an initial design, we plan to implement three plugins:  
+- A **QueueSort** function called `TopologicalSort`. 
+- A **Filter** function called `CheckRiskNodebandwidth`. 
+- A **Score** function called `NetworkMinCost`. 
+
+First, pods are sorted based on their established dependencies. Then, candidate nodes are filtered out based on their current network bandwidth to remove nodes with high incoming traffic. Lastly, nodes are scored based on network weights ensuring network latency is 
 minimized for pods belonging to the same application. 
+
 This is established via a [Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)
-called Application Group (AppGroup). Also, another CRD named NetworkTopology (NetTopology) 
-maps the Kubernetes infrastructure into zones and nodes so that network weights can be calculated. 
-Further explanations are given below on how the proposed `NetworkMinCost` plugin reduces the latency 
-in the cluster by using both CRDs.  
+called Application Group (AppGroup).
+
+Also, another CRD named NetworkTopology (NetworkTopology) maps the infrastructure into zones and nodes so that network weights can be calculated and then used by the scoring plugin. 
+
+Further explanations are given below on how the proposed plugins interact with both CRDs. 
 
 ![design](figs/design.png)
 
 ## Application Group CRD (AppGroup)
 
-Create an AppGroup CRD for service chains based on the [Pod Group](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/kep/42-podgroup-coscheduling) concept introduced for the [Co-scheduling](https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/pkg/coscheduling/README.md) plugin. 
-The Pod group establishes a connection among Pods of the same type, while the proposed AppGroup creates a connection among different Pods.
-The goal is to establish Pod dependencies with specific affinities and then record Pod allocations (i.e, node - pod pairs) under the status part. 
+We designed an AppGroup CRD for service chains based on the [Pod Group](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/kep/42-podgroup-coscheduling) concept introduced for the [Co-scheduling](https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/pkg/coscheduling/README.md) plugin. 
+The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different pods.
+The goal is to establish pod dependencies based on service topology information and record pod allocations (i.e, node/pod pairs) under the status part of the CRD. 
 
 ```yaml
 # App Group CRD spec
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: appgroups.scheduling.sigs.k8s.io
   annotations:
-    "api-approved.kubernetes.io": "To be Defined"
+    api-approved.kubernetes.io: "To be Defined" # edited manually
+    controller-gen.kubebuilder.io/version: v0.6.2
+  creationTimestamp: null
+  name: appgroup.scheduling.sigs.k8s.io
 spec:
   group: scheduling.sigs.k8s.io
   names:
     kind: AppGroup
+    listKind: AppGroupList
     plural: Appgroups
-    singular: Appgroup
     shortNames:
-    - ag
-    - ags
+      - ag
+      - ags
+    singular: appgroup
   scope: Namespaced
   versions:
-  - name: "v1alpha1"
-    served: true
-    storage: true
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        type: object
+        description: AppGroup establishes a service dependency graph among different Pods.
         properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
           spec:
-            type: object
+              description: AppGroup defines the number of Pods and which Pods belong to the group.
+              properties:
+                numMembers:
+                  format: int32
+                  type: integer
+                  minimum: 1
+                  description: Number of Pods belonging to the App Group
+                topologySortingAlgorithm:
+                  type: string
+                  description: The algorithm for TopologyOrder(Status)
+                Pods:
+                  type: array
+                  description: The Pods belonging to the group
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Pod Name
+                      type:
+                        type: string
+                      required:
+                        - name
+                        - type
+                      dependencies:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            description: Definition of Pod Affinities
+                              name:
+                                description: Name of the Pod.
+                                type: string
+                              type:
+                                type: string
+                              required:
+                                - name
+                                - type
+                            type: object
+          status:
+            description: Record Pod Allocations (Pod id, hostnames).
             properties:
-              numMembers: # number of Pods belonging to the App Group
+              runningPods:
+                description: The number of actively running pods.
+                format: int32
                 type: integer
-                minimum: 1
-              Pods: # The Pods belonging to the Group
-                type: array # 
-                items:
-                  type: object
-                  properties:
-                    name: # Pod Name 
-                      type: string 
-                    type: 
-                      type: string
-                    dependencies: # Define Pod Affinities
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          podAffinity: # Specific Affinities
-                            type: string
-          status: # update replicas and hostnames depending on Pod Allocations
-            type: object
-            properties:
-              scheduled:
+                minimum: 0
+              podsScheduled:
                 type: array
                 additionalProperties:
-                  name: # Pod name
+                  name:
                     type: string
-                  replicaID: # Pod ID
+                    description: Pod Name
+                  replicaID:
                     type: string
-                  hostname: # Hostname allocating Pod replica
+                    description: Pod ID
+                  hostname:
                     type: string
-                  
+                    description: Hostname allocating Pod instance
+              scheduleStartTime:
+                description: ScheduleStartTime of the AppGroup
+                format: date-time
+                type: string
+              topologyCalculationTime:
+                description: topologyCalculationTime of the AppGroup
+                format: date-time
+                type: string
+              topologyOrder:
+                description: The optimal order to schedule pods on this App Group based on a given algorithm.
+                type: array
+                items:
+                  description: Pod Name and Pod Priority index
+                  type: object
+                    podName:
+                      type: string
+                      description: Pod Name
+                    index:
+                      type: integer
+                      default: 1
+                      minimum: 1
+                      format: int64
+                      description: Priority index for each Pod (e.g., 1, 2, ...)
+                        (1 means pod should be scheduled first in the AppGroup)
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
 ```
 
 ### Example
@@ -221,29 +311,108 @@ metadata:
   name: A1
 spec:
   numMembers: 3
+  topologySortingAlgorithm: KahnSort
   Pods:
     - name: P1
       type: Pod
       dependencies:
-        podAffinity: P2, P3
+        - name: P2
+          type: Pod
     - name: P2
       type: Pod
       dependencies:
-        podAffinity: P1, P3
+        - name: P3
+          type: Pod
     - name: P3
       type: Pod
-      dependencies:
-        podAffinity: P1, P2
 ```
 
-## Network Topology CRD (NetTopology)
+An AppGroup controller updates the AppGroup CRD under status regarding pods scheduled in the cluster and topology order. 
+Currently, four algorithms are supported for topological sorting: KahnSort, TarjanSort, ReverseKahn, ReverseTarjan. The implementation is based on the work open-sourced [here](https://github.com/otaviokr/topological-sort) 
+A priority index is given to each pod based on the sorting algorithm. An order equal to 1 means the pod should be allocated first in the AppGroup.
 
-Create a NetTopology CRD based on the current [NodeResourceTopology CRD](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/noderesourcetopology).
-The goal is to map the cluster infrastructure into zones and nodes. 
-Nodes are assigned a different zone or location.  
+```go
+// AppGroupController is a controller that process App groups using provided Handler interface
+type AppGroupController struct {
+	eventRecorder   record.EventRecorder
+	agQueue         workqueue.RateLimitingInterface
+	agLister        schedlister.AppGroupLister
+	podLister       corelister.PodLister
+	agListerSynced  cache.InformerSynced
+	podListerSynced cache.InformerSynced
+	agClient        schedclientset.Interface
+}
+```
+
+```go
+// AppGroupStatus represents the current state of a app group.
+type AppGroupStatus struct {
+	// The number of actively running pods.
+	// +optional
+	RunningPods int32 `json:"runningPods,omitempty"`
+
+	// PodsScheduled defines pod allocations (pod name, pod id, hostname).
+	// +optional
+	PodsScheduled ScheduledList `json:"scheduled,omitempty"`
+
+	// ScheduleStartTime of the group
+	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty"`
+
+	// TopologyCalculationTime of the group
+	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty"`
+
+	// Topology order for TopSort Algorithms
+	TopologyOrder TopologyList `json:"topologyOrder,omitempty"`
+}
+
+// AppGroupPodsScheduled represents the Pod Affinities of a given Pod
+// +protobuf=true
+type AppGroupPodsScheduled struct {
+	Name      string `json:"name" protobuf:"bytes,1,opt,name=name"`
+	ReplicaID string `json:"replicaID" protobuf:"bytes,2,opt,name=replicaID"`
+	Hostname  string `json:"hostname,omitempty" protobuf:"bytes,3,opt,name=hostname"`
+}
+
+// ScheduledList contains an array of Pod Affinities.
+// +protobuf=true
+type ScheduledList []AppGroupScheduled
+
+// AppGroupTopology represents the calculated order for the given AppGroup
+// +protobuf=true
+type AppGroupTopology struct {
+	PodName string `json:"podName" protobuf:"bytes,1,opt,name=podName"`
+	Index   int64  `json:"index" protobuf:"bytes,2,opt,name=index"`
+}
+
+// TopologyList contains an array of Pod orders for TopologySorting algorithm.
+// +protobuf=true
+type TopologyList []AppGroupTopology
+```
+
+### AppGroup Test based on Online Boutique
+
+In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
+It consists of 10 pods, which we named from P1 - P10. 
+
+![appGroupTestOnlineBoutique](figs/appGroupTestOnlineBoutique.png)
+
+As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
+We attribute a **priority index** to each pod so that we can evaluate their topology order in the **Less function of the TopologicalSort plugin**.
+The topology list corresponds to:
+
+```go
+topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
+```
+
+![appGroupTest](figs/appGroupTest.png)
+
+## Network Topology CRD (NetworkTopology)
+
+We also designed a NetworkTopology CRD based on the current [NodeResourceTopology CRD](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/noderesourcetopology).
+The goal is to map the cluster infrastructure into zones and nodes. Nodes are assigned a different zone or location.  
 Then, under the status part, network costs are updated based on a specified algorithm. 
-Further details are given [here]()
 
+As a design decision, we plan to deploy a NetworkTopology CRD for each node. We argue that establishing a single CRD for all nodes might reduce the system performance concerning execution time to find the network weights for a given node. In contrast, deploying multiple CRDs will have an impact on memory. We plan to perform experiments to evaluate the performance and feasibility of the NetworkTopology CRD per node. 
 
 ```yaml
 # Network CRD spec
@@ -251,66 +420,107 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    "api-approved.kubernetes.io": "To be Defined"
-  name: networktopology.topology.node.k8s.io
+    api-approved.kubernetes.io: "To be Defined" # edited manually
+    controller-gen.kubebuilder.io/version: v0.6.2
+  creationTimestamp: null
+  name: networkTopology.scheduling.sigs.k8s.io # OR netTopology.topology.node.k8s.io?
 spec:
-  group: topology.node.k8s.io
+  group: scheduling.sigs.k8s.io # OR topology.node.k8s.io?
   names:
     kind: NetworkTopology
-    plural: NetworkTopologies
-    singular: NetworkTopology
+    listKind: NetworkTopologyList
+    plural: networktopologies
     shortNames:
+    - net-topo
     - nt
-    - nts
+    singular: networktopology
   scope: Namespaced
   versions:
-  - name: "v1alpha1"
-    served: true
-    storage: true
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        type: object
+        description: NetTopology describes the node network topology.
         properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
           spec:
             type: object
             properties:
-              zones: # Nodes / Zones in the infrastructure
-                type: array
+              topologyAlgorithm:
+                type: string
+                description: The algorithm for weight calculation (Status)
+              zones:
+                description: ZoneList contains an array of Zones in the infrastructure.
                 items:
-                  type: object
+                  description: Zone represents a topology zone.
                   properties:
                     name:
                       type: string
                     type:
                       type: string
-                    parent:
-                      type: string
                     resources:
-                      type: array
+                      description: ResourceInfoList contains an array of ResourceInfo
+                        objects.
                       items:
-                        type: object
+                        description: ResourceInfo contains information about one resource
+                          type.
                         properties:
-                           name:
-                              type: string
-                           type: 
-                              type: string
+                          name:
+                            type: string
+                            description: Name of the resource.
+                          type:
+                            type: string
+                            description: Type of the resource (e.g., node).
+                      type: object
+                  type: array
+                required:
+                - name
+                - type
+                type: object
           status:
-            type: object
+            description: Record Network Weights among zones and nodes.
             properties:
               weights:
                 type: array
+                description: weightList contains an array of weightInfo objects.
                 items:
-                  type: object
-                  name: # node / zone name
+                  algorithmName:
                     type: string
-                  properties:
-                    name: # node / zone name
-                       type: string
-                    algorithm: # name of the Algorithm
-                      type: string
-                    cost: # update costs
-                      type: integer
-                      default: 0
+                    description: Algorithm Name
+                  costList:
+                    description: Record weights for several nodes based on the algorithm
+                      type: object
+                      properties:
+                        destination:
+                          type: string
+                          description: Node / zone name (Destination)
+                        cost:
+                          type: integer
+                          default: 0
+                          minimum: 0
+                          format: int64
+                          description: Cost from Origin (Node) to Destination (Node / Zone)
+                        type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
 ```
 
 ### Example
@@ -319,32 +529,85 @@ spec:
 
 ```yaml
 # Example Network CRD 
-apiVersion: topology.node.k8s.io/v1alpha1
+apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
-  name: network-A
+  name: worker-1
   namespace: test-namespace
 spec:
+  topologyAlgorithm: Dijkstra
   zones:
-    - name: zone-z1
+    - name: z1
       type: Zone
       resources:
-        - name: node-1
+        - name: worker-1
           type: Node
-        - name: node-2
+        - name: worker-2
           type: Node
-    - name: zone-z2
+    - name: z2
       type: Zone
       resources:
-        - name: node-3
+        - name: worker-3
           type: Node
-    - name: zone-z3
+    - name: z3
       type: Zone
       resources:
-        - name: node-4
+        - name: worker-4
           type: Node
-        - name: node-5
+        - name: worker-5
           type: Node
+```
+
+An NetworkTopology controller updates the CRD under status regarding network weights calculated based on the specified algorithm.   
+
+```go
+// NetworkTopologyController is a controller that process Network Topology using provided Handler interface
+type NetworkTopologyController struct {
+	eventRecorder    record.EventRecorder
+	ntQueue          workqueue.RateLimitingInterface
+	ntLister         schedlister.NetworkTopologyLister
+	nodeLister       corelister.NodeLister
+	ntListerSynced   cache.InformerSynced
+	nodeListerSynced cache.InformerSynced
+	ntClient         schedclientset.Interface
+}
+```
+
+```go
+// NetworkTopologyStatus represents the current state of a Network Topology.
+type NetworkTopologyStatus struct {
+	// The calculated weights in the topology.
+	// +optional
+	Weights NetworkTopologyWeightList `json:"weights,omitempty"`
+}
+
+// NetworkTopologyWeightList contains an array of NetworkTopologyWeightInfo objects.
+// +protobuf=true
+type NetworkTopologyWeightList []NetworkTopologyWeightInfo
+
+// NetworkTopologyResourceInfo contains information about one resource type.
+// +protobuf=true
+type NetworkTopologyWeightInfo struct {
+	// Preferred Algorithms
+	AlgorithmName string `json:"algorithmName" protobuf:"bytes,1,opt,name=algorithmName"`
+
+	// Costs from a given Origin to a given Destination
+	CostList NetworkTopologyCostList `json:"costList" protobuf:"bytes,2,opt,name=costList"`
+}
+
+// NetworkTopologyAlgorithmList contains an array of NetworkTopologyAlgorithmInfo objects.
+// +protobuf=true
+type NetworkTopologyCostList []NetworkTopologyCostInfo
+
+// NetworkTopologyResourceInfo contains information about one resource type.
+// +protobuf=true
+type NetworkTopologyCostInfo struct {
+	// Name of the origin (e.g., Node Name).
+	Destination string `json:"destination" protobuf:"bytes,1,opt,name=destination"`
+
+	// Network Cost
+	Cost int64 `json:"cost" protobuf:"bytes,2,opt,name=cost"`
+}
 ```
 
 ## The inclusion of bandwidth in the scheduling process 
@@ -352,7 +615,7 @@ spec:
 ### Bandwidth Requests via extended resources
 
 We plan to advertise the node's (physical) bandwidth capacity of the cluster via [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/). 
-The Bandwidth resource component will send HTTP requests to the Kubernetes API server:
+A bandwidth resource component will be developed to send HTTP requests to the Kubernetes API server regarding the node's bandwidth capacity:
 
 ```HTTP
 PATCH /api/v1/nodes/<your-node-name>/status HTTP/1.1
@@ -363,7 +626,7 @@ Host: k8s-master:8080
 [
   {
     "op": "add",
-    "path": "/status/capacity/networkAware.com~1bandwidth",
+    "path": "/status/capacity/network.aware.com~1bandwidth",
     "value": "10000000000" 
   }
 ]
@@ -382,13 +645,13 @@ The output will show that the Node has a capacity of 10 Gbps:
 "capacity": {
   "cpu": "2",
   "memory": "2049008iK",
-  "networkAware.com/bandwidth": "10000000000",
+  "network.aware.com/bandwidth": "10000000000",
 ```
 
 ### Bandwidth Limitations via the Bandwidth CNI plugin
 
-The [bandwidth CNI plugin](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/
-) supports pod ingress and egress traffic shaping to limit container bandwidth.
+The [bandwidth CNI plugin](https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/network-plugins/) 
+supports pod ingress and egress traffic shaping to limit container bandwidth.
 Containers share the host network bandwidth when deployed on the same node. 
 Limiting container bandwidth can prevent mutual interference and improve network stability.
 
@@ -426,29 +689,53 @@ spec:
     image: example
     resources:
       requests:
-        networkAware.com/bandwidth: 100000   # 100K
+        networkAware.com/bandwidth: 10000000 # 10M
       limits:
         networkAware.com/bandwidth: 10000000 # 10M  
  ``` 
 
-This will allow to perform filter / score algorithms (e.g., `PodFitsHostResources`, `MostRequested`, `BalancedAllocation`) based on bandwidth.
+This allows to perform filter / score algorithms (e.g., `PodFitsHostResources`, `MostRequested`, `BalancedAllocation`) based on bandwidth resources.
 
 ## Netperf component - measuring Latency in the cluster
 
 Latency will be monitored through a [netperf](https://github.com/HewlettPackard/netperf) component. 
-Netperf tests will be executed based on the cluster infrastructure specified in the NetTopology CRD. 
-This allows measuring the latency between cluster nodes / zones. 
+Netperf tests will be executed based on the nodes available in the infrastructure. 
+This allows to measure the latency between nodes / zones. 
 As an initial design, we are focused on the **90th percentile latency**.
 
 ![netperf](figs/netperf.png)
 
- Histograms are created in Prometheus with the measured values and then the controller for the NetTopology CRD will update the network weights on the CRD based on the specified algorithm. 
-As a default algorithm, the [Dijkstra Shortest Path](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/) will be implemented. 
-At a later stage, other algorithms can be added (e.g., [Bellman Ford](https://www.geeksforgeeks.org/bellman-ford-algorithm-dp-23/)).
+We plan to create Histograms in [Prometheus](https://prometheus.io/) with the measured values.
 
-## Filter and Score plugins
+To address scalability concerns, network weights are calculated by the controller (NetworkTopology) under status for each node. 
 
-<!-- # To Discuss: the inclusion of the CheckRiskNodebandwidth algorithm in the initial design. 
+The controller builds the network graph based on topology information (i.e., zones, nodes) available in the NetTopology CRD 
+and updates the network weights for the given node based on the Netperf measurements available in Prometheus. 
+
+The cached graph in the controller is recalculated based on new measurements. These updates can be configured 
+for a certain period (e.g., every 1 min, every 5 minutes, every 10 minutes). 
+
+As a default algorithm, the [Dijkstra Shortest Path](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/) will be implemented.
+
+Typically, the time complexity of the Dijkstra algorithm is: `O (V + E log V)`, where V corresponds to Vertices and E to Edges in the infrastructure.  
+
+We acknowledge the overhead introduced by our controller and corresponding `NetworkMinCost` plugin. 
+However, to make better decisions concerning latency, we need accurate and up-to-date information regarding cluster latency. 
+
+Experiments are planned to evaluate the overhead of our design in different topologies.
+We also aim to study the frequency of the Netperf measurements and the trade-off between monitoring frequencies and accuracy.
+ 
+At a later stage, other algorithms for weight calculation can be added and supported (e.g., [Bellman Ford](https://www.geeksforgeeks.org/bellman-ford-algorithm-dp-23/)).
+
+The component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!!!)
+
+## Network-Aware Plugins
+
+### Description of the `TopologicalSort` Algorithm
+
+**Extension point: QueueSort**
+
+TODO
 
 ### Description of the `CheckRiskNodebandwidth` Algorithm
 
@@ -527,10 +814,7 @@ The `node_risk` is calculated for all nodes.
 As a result, both `N1`, `N2` will be considered for scoring, 
 while `N3` is filtered out due to its **high risk (0.787).**
 
-![filter_example](figs/CheckRiskNodebandwidth_example.png)
-
-
--->
+![filter_example](figs/checkRiskNodeBandwidthExample.png)
 
 ### Description of the `NetworkMinCost` Algorithm
 
@@ -538,13 +822,24 @@ while `N3` is filtered out due to its **high risk (0.787).**
 
 We propose a scoring plugin called `NetworkMinCost` to favor nodes with the lowest combined cost based on the pod AppGroup.
 
-Pod allocations (pod id, pod hostname pairs) are available in the AppGroup CRD updated by the controller under the status part. 
+Pod allocations (pod name, pod id, pod hostname) are available in the AppGroup CRD updated by the controller under the status part. 
 
-Network weights are available in the NetTopology CRD updated by the controller based on the Netperf measurements in Prometheus. 
-The default algorithm will be the Dijkstra Shortest Path. 
-
+Network weights are available in the NetworkTopology CRD updated by the controller based on the Netperf measurements in Prometheus. 
+ 
 If not a single pod belonging to the same AppGroup has been already allocated, 
-we score all candidate nodes equally. We plan to combine our scoring plugin with resource scoring plugins (e.g., `BalancedAllocation`, `LeastRequestedPriority`). 
+we score all candidate nodes equally: 
+
+```go
+score := framework.MinNodeScore
+
+// Check if Pod belongs to an App Group
+agName := util.GetAppGroupLabel(pod)
+if len(agName) == 0 { // Score all nodes equally
+	return score, framework.NewStatus(framework.Success, "Pod does not belong to an AppGroup: minimum score")
+}
+```
+
+We plan to combine our scoring plugin with resource scoring plugins (e.g., `BalancedAllocation`, `LeastRequestedPriority`). 
 We will attribute a higher weight to our plugin to prefer decisions focused on low latency. 
 For instance, consider the following scheduler policy config file as an example:
 
@@ -567,21 +862,6 @@ For instance, consider the following scheduler policy config file as an example:
 ]
 }
 ```
-
-To address scalability concerns, network weights are calculated by the controller.  
-
-The controller builds the network graph based on topology information (i.e., zones, nodes) available in the NetTopology CRD 
-and on the Netperf measurements available in Prometheus. Then, it updates the network weights in the NetTopology CRD under the status part.
-
-The cached graph in the controller is recalculated based on new measurements. These updates can be configured 
-for a certain period (e.g., every 1 min, every 5 minutes, every 10 minutes). 
-
-Typically, the time complexity of the Dijkstra algorithm is: `O (V + E log V)`, where V corresponds to Vertices and E to Edges in the infrastructure.  
-
-We acknowledge the overhead introduced by our plugin. However, to make better decisions concerning latency, we need accurate and up-to-date information from previous pod allocations and cluster latency. 
-
-Experiments are planned to evaluate the overhead of our design in different topologies. 
-We also aim to study the frequency of the Netperf measurements and the trade-off between monitoring frequencies and accuracy.
   
 #### Example
 
@@ -737,7 +1017,7 @@ score = MAX_SCORE - node_normalized_cost
 
 Thus, nodes with lower costs are favored. 
 
-![score_example](figs/NetworkMinCost_example.PNG)
+![score_example](figs/networkMinCostExample.png)
 
 # Known limitations
 
