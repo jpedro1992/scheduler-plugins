@@ -15,7 +15,7 @@
 - [Proposal - Design & Implementation Details](#proposal---design--implementation-details)
   - [Overview of the System Design](#overview-of-the-system-design)
   - [Application Group CRD (AppGroup)](#application-group-crd-appgroup)
-  - [Network Topology CRD (NetTopology)](#network-topology-crd-networktopology)
+  - [Network Topology CRD (NetworkTopology)](#network-topology-crd-networktopology)
   - [The inclusion of bandwidth in the scheduling process](#the-inclusion-of-bandwidth-in-the-scheduling-process)
     - [Bandwidth Requests via extended resources](#bandwidth-requests-via-extended-resources)
     - [Bandwidth Limitations via the Bandwidth CNI plugin](#bandwidth-limitations-via-the-bandwidth-cni-plugin)
@@ -425,7 +425,7 @@ metadata:
     api-approved.kubernetes.io: "To be Defined" # edited manually
     controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
-  name: networkTopology.scheduling.sigs.k8s.io # OR netTopology.topology.node.k8s.io?
+  name: networkTopology.scheduling.sigs.k8s.io # OR networkTopology.topology.node.k8s.io?
 spec:
   group: scheduling.sigs.k8s.io # OR topology.node.k8s.io?
   names:
@@ -441,7 +441,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NetTopology describes the node network topology.
+        description: NetworkTopology describes the node topology information.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -527,7 +527,7 @@ status:
 
 ### Example
 
-![zone](figs/netTopologyCRD_example.png)
+![zone](figs/networkTopologyCRDExample.png)
 
 ```yaml
 # Example Network CRD 
@@ -711,7 +711,7 @@ We plan to create Histograms in [Prometheus](https://prometheus.io/) with the me
 
 To address scalability concerns, network weights are calculated by the controller (NetworkTopology) under status for each node. 
 
-The controller builds the network graph based on topology information (i.e., zones, nodes) available in the NetTopology CRD 
+The controller builds the network graph based on topology information (i.e., zones, nodes) available in the NetworkTopology CRD 
 and updates the network weights for the given node based on the Netperf measurements available in Prometheus. 
 
 The cached graph in the controller is recalculated based on new measurements. These updates can be configured 
@@ -737,7 +737,62 @@ The component will be developed based on [k8s-netperf](https://github.com/leanne
 
 **Extension point: QueueSort**
 
-TODO
+Pods belonging to an AppGroup should be sorted based on their topological information. 
+The `TopologicalSort` plugin compares the pods' order index available in the AppGroup CRD (status) for the preferred sorting algorithm.  
+If pods do not belong to an AppGroup or to different AppGroups, we follow the strategy of the **less function** provided by the [QoS plugin](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/qos)
+
+```go
+// Less is the function used by the activeQ heap algorithm to sort pods.
+// Sort Pods based on their App Group and corresponding service topology.
+// Otherwise, follow the strategy of the QueueSort Plugin
+func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
+	p1AppGroup := util.GetAppGroupLabel(pInfo1.Pod)
+	p2AppGroup := util.GetAppGroupLabel(pInfo2.Pod)
+
+	if len(p1AppGroup) == 0 || len(p2AppGroup) == 0 { // Follow QoS Sort
+		s := &qos.Sort{}
+		return s.Less(pInfo1, pInfo2)
+	}
+
+	if p1AppGroup == p2AppGroup { // Pods belong to the same App Group
+		klog.Infof("Pods: %v and %v from the same appGroup %v", pInfo1.Pod.Name, pInfo2.Pod.Name, p1AppGroup)
+		agName := p1AppGroup
+		appGroup, err := findAppGroupTopologicalSort(agName, ts)
+		if err != nil {
+			klog.ErrorS(err, "Error while returning AppGroup")
+			s := &qos.Sort{}
+			return s.Less(pInfo1, pInfo2)
+		}
+		var orderP1 = math.MaxInt64
+		var orderP2 = math.MaxInt64
+
+		for _, p := range appGroup.Status.TopologyOrder {
+			if p.PodName == pInfo1.Pod.Name { //get order of P1
+				orderP1 = int(p.Index)
+			}
+			if p.PodName == pInfo2.Pod.Name { //get order of P2
+				orderP2 = int(p.Index)
+			}
+		}
+		klog.Infof("Pod %v order: %v and Pod %v order: %v.", pInfo1.Pod.Name, orderP1, pInfo2.Pod.Name, orderP2)
+
+		// Lower is better, thus invert result!
+		return !(orderP1 > orderP2)
+	} else { // Pods do not belong to the same App Group: follow the strategy from the QoS plugin
+		klog.Infof("Pod %v and %v do not belong to the same appGroup %v", pInfo1.Pod.Name, pInfo2.Pod.Name, p1AppGroup)
+		s := &qos.Sort{}
+		return s.Less(pInfo1, pInfo2)
+	}
+}
+```
+
+#### Example
+
+Let's consider the Online Boutique application shown previously. 
+The AppGroup consists of 10 pods and the topology order based on the KahnSort algorithm is **P1, P10, P9, P8, P7, P6, P5, P4, P3, P2.**
+The plugin favors low order indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
+
+![queueExample](figs/queueSortExample.png)
 
 ### Description of the `CheckRiskNodebandwidth` Algorithm
 
@@ -901,7 +956,7 @@ spec:
           type: Node
 ```
 
-And at a given moment, the status part of the NetTopology CRDs is the following:
+And at a given moment, the status part of the NetworkTopology CRDs is the following:
 
 ```yaml
 # Status from NetworkTopology CRD worker-1 
@@ -1029,7 +1084,7 @@ At a given moment, the status part is the following:
 
 Four pods have already been allocated: two replicas of `P1` and two replicas of `P2`. 
 
-First, we calculate the accumulated shortest path cost for all candidate nodes. 
+First, we calculate the accumulated shortest path cost for the candidate node. 
 The accumulated cost is returned as the score:
 
 ```go
@@ -1086,11 +1141,32 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 
 # Known limitations
 
-TO DO
+- CRDs installation:
+
+    The `TopologicalSort` plugin depends on the specification of an AppGroup CRD for different pods.
+
+    The `NetworkMinCost` plugin depends on both CRDs (AppGroup CRD and NetworkTopology CRD).
+
+    Without both CRDs, the plugins `TopologicalSort` and `NetworkMinCost` will follow a default strategy: queue sorting based on the QoS plugin and scoring all nodes equally, respectively.
+
+- QueueSort extension point:
+
+    The `TopologicalSort` plugin makes use of the QueueSort extension point, so 
+    it can't be combined with other plugins also accessing this extension point.  
 
 # Test plans
 
-Unit tests and Integration tests will be added.
+Unit tests and Integration tests will be added: 
+
+- Unit Tests
+    - For both CRDs (AppGroup and NetworkTopology) concerning the controllers and respective informers.
+    - For all plugins: `TopologicalSort`, `CheckRiskNodebandwidth` and `NetworkMinCost`.
+- Integration Tests
+    - Default configurations (plugins enabled / disabled)
+    - Impact on the scheduling flow (performance, resource usage)
+    - Impact of both CRDs (AppGroup and NetworkTopology).
+- End-to-end tests
+    - Comprehensive E2E testing would graduate the framework from Alpha to Beta.
 
 # Production Readiness Review Questionnaire
 
@@ -1143,7 +1219,19 @@ Unit tests and Integration tests will be added.
 
 # Graduation criteria
 
-TO DO
+- Alpha 
+    - [ ]  The implementation of the AppGroup controller (AppGroup CRD).
+    - [ ]  The implementation of the NetworkTopology controller (NetworkTopology CRD).
+    - [ ]  The development of the Netperf component. 
+    - [ ]  The development of the Bandwidth resource component.
+    - [ ]  The implementation of the `TopologicalSort` plugin.
+    - [ ]  The implementation of the `NetworkMinCost` plugin.
+    - [ ]  Unit tests and integration tests from Test plans.
+
+- Beta 
+    - [ ]  The implementation of the `CheckRiskNodebandwidth` plugin.
+    - [ ]  Add E2E tests
+    - [ ]  Provide beta-level documentation.
 
 # Implementation history
 
