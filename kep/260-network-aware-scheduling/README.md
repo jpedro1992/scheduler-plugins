@@ -812,7 +812,7 @@ The `node_risk` is calculated for all nodes.
 As a result, both `N1`, `N2` will be considered for scoring, 
 while `N3` is filtered out due to its **high risk (0.787).**
 
-![filter_example](figs/checkRiskNodeBandwidthExample.png)
+![filterExample](figs/filterExample.png)
 
 ### Description of the `NetworkMinCost` Algorithm
 
@@ -1015,7 +1015,7 @@ score = MAX_SCORE - node_normalized_cost
 
 Thus, nodes with lower costs are favored. 
 
-![score_example](figs/networkMinCostExample.png)
+![scoreExample](figs/scoreExample.png)
 
 # Known limitations
 
