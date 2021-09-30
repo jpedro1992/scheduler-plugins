@@ -21,6 +21,8 @@
     - [Bandwidth Limitations via the Bandwidth CNI plugin](#bandwidth-limitations-via-the-bandwidth-cni-plugin)
   - [Netperf component](#netperf-component---measuring-latency-in-the-cluster)  
   - [Plugins](#plugins)
+    - [Description of the `TopologicalSort` Algorithm](#description-of-the-topologicalsort-algorithm)
+    - [Description of the `CheckRiskNodeBandwidth` Algorithm](#description-of-the-checkrisknodebandwidth-algorithm)
     - [Description of the `NetworkMinCost` Algorithm](#description-of-the-networkmincost-algorithm)
 - [Known limitations](#known-limitations)
 - [Test plans](#test-plans)
@@ -866,79 +868,113 @@ For instance, consider the following scheduler policy config file as an example:
 ##### Build the Network Graph 
 
 Let's consider that our cluster has five nodes `N1 - N5` and three zones `Z1 - Z3`.
-The spec definition of the NetTopology CRD is the following: 
+As an example, the spec definition of the NetworkTopology CRD for worker-1 is the following: 
 
 ```yaml
 # Example Network CRD 
 apiVersion: topology.node.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
-  name: network-A
+  name: worker-1
   namespace: test-namespace
 spec:
+  topologyAlgorithm: Dijkstra
   zones:
-    - name: zone-z1
+    - name: z1
       type: Zone
       resources:
-        - name: node-1
+        - name: worker-1
           type: Node
-        - name: node-2
+        - name: worker-2
           type: Node
-    - name: zone-z2
+    - name: z2
       type: Zone
       resources:
-        - name: node-3
+        - name: worker-3
           type: Node
-    - name: zone-z3
+    - name: z3
       type: Zone
       resources:
-        - name: node-4
+        - name: worker-4
           type: Node
-        - name: node-5
+        - name: worker-5
           type: Node
 ```
 
-And at a given moment, the status part in the NetTopology CRD is the following:
+And at a given moment, the status part of the NetTopology CRDs is the following:
 
 ```yaml
-# Status from Network CRD 
+# Status from NetworkTopology CRD worker-1 
 (...)
           status:
             properties:
               weights:
-                - name: node-1
+                algorithmName: Dijkstra
+                - costList:
                   items:
-                    - name: node-2
-                      algorithm: Dijkstra
-                      cost: 1 
-                    - name: node-3
-                      algorithm: Dijkstra
-                      cost: 4 
-                - name: node-2
+                    - destination: worker-2
+                      cost: 1
+                    - destination: worker-3
+                      cost: 4
+# Status from NetworkTopology CRD worker-2 
+(...)
+          status:
+            properties:
+              weights:
+                algorithmName: Dijkstra
+                - costList:
                   items:
-                    - name: node-4
-                      algorithm: Dijkstra
-                      cost: 6 
-                - name: node-3
+                    - destination: worker-1
+                      cost: 1
+                    - destination: worker-4
+                      cost: 6
+# Status from NetworkTopology CRD worker-3 
+(...)
+          status:
+            properties:
+              weights:
+                algorithmName: Dijkstra
+                - costList:
                   items:
-                    - name: node-4
-                      algorithm: Dijkstra
-                      cost: 5 
-                    - name: node-5
-                      algorithm: Dijkstra
+                    - destination: worker-1
+                      cost: 4
+                    - destination: worker-4
+                      cost: 5
+                    - destination: worker-5
                       cost: 3
-                - name: node-4
-                   items:
-                     - name: node-5
-                       algorithm: Dijkstra
-                       cost: 2 
+# Status from NetworkTopology CRD worker-4 
+(...)
+          status:
+            properties:
+              weights:
+                algorithmName: Dijkstra
+                - costList:
+                  items:
+                    - destination: worker-2
+                      cost: 6
+                    - destination: worker-3
+                      cost: 5
+                    - destination: worker-5
+                      cost: 2
+# Status from NetworkTopology CRD worker-5 
+(...)
+          status:
+            properties:
+              weights:
+                algorithmName: Dijkstra
+                - costList:
+                  items:
+                    - destination: worker-3
+                      cost: 3
+                    - destination: worker-4
+                      cost: 2
 ```
 
-Based on the NetTopology CRD, the controller will create the following network graph:
+Based on the NetworkTopology CRDs, the controller will create the following network graph:
  
 ![graph](figs/graph.png)
 
-##### Score nodes for a given pod based on the AppGroup CRD 
+##### Score nodes for a given pod based on the AppGroup CRD and NetworkTopology CRD
 
 Let's consider that we need to schedule the pod `P3` belonging to the Application group `A1`, 
 containing three pods `P1 - P3` with established dependencies:
@@ -955,15 +991,13 @@ spec:
     - name: P1
       type: Pod
       dependencies:
-        podAffinity: P2, P3
+        podAffinity: P2
     - name: P2
       type: Pod
       dependencies:
-        podAffinity: P1, P3
+        podAffinity: P3
     - name: P3
       type: Pod
-      dependencies:
-        podAffinity: P1, P2
 ```
 
 At a given moment, the status part is the following: 
@@ -973,47 +1007,80 @@ At a given moment, the status part is the following:
 (...)        
           status: 
             properties:
-              scheduled:
+              podsScheduled:
                 - name: P1
                   type: Pod
-                  replicaID: pod1-testtest-test1
-                  hostname: node-1
+                  replicaID: pod1-test1
+                  hostname: worker-1
                 - name: P1
                   type: Pod
-                  replicaID: pod1-testtest-test2
-                  hostname: node-2
+                  replicaID: pod1-test2
+                  hostname: worker-2
                 - name: P2
                   type: Pod
-                  replicaID: pod2-testtest-test1
-                  hostname: node-2
-                - name: P1
+                  replicaID: pod2-test1
+                  hostname: worker-2
+                - name: P2
                   type: Pod
-                  replicaID: pod2-testtest-test2
-                  hostname: node-4
-                  
+                  replicaID: pod2-test2
+                  hostname: worker-4
+              (...)
 ```
 
 Four pods have already been allocated: two replicas of `P1` and two replicas of `P2`. 
 
 First, we calculate the accumulated shortest path cost for all candidate nodes. 
+The accumulated cost is returned as the score:
 
-Second, we normalize (between 0 and 100) the accumulated cost for all nodes as the following: 
+```go
+var cost int64 = 0
+// calculate accumulated shortest path, network weighs available in the NetworkTopology CRD
+	
+for _, podAllocated := range appGroup.Status.Scheduled { // For each pod already allocated
+	for _, dependencyName := range dependencyList { // For each pod dependency
+		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
+			for _, w := range networkTopology.Status.Weights { // Check the weights List
+				if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
+					for _, c := range w.CostList { // For each costInfo in CostList
+						if c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
+							cost += c.Cost // Add the cost to the sum
+						}
+					}
+				}
+			}
+		}
+	}
+}
 
-```latex
-MAX_SCORE = 100
-min_cost = min(all_costs)
-max_cost = max(all_costs)
+// Return Accumulated Cost as score
+score = cost
 
-node_normalized_cost = MAX_SCORE * ( ( node_cost - min_cost) / (max_cost - min_cost)
+klog.V(6).Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
+return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 ``` 
 
-Then, the node score is computed as the following, assuming that lower costs correspond to lower latency:
+Then, we get the maximum and minimum costs for all candidate nodes to normalize the values between 0 and 100. 
+After normalization, **nodes with lower costs are favored** since it also corresponds to lower latency:
 
-```latex
-score = MAX_SCORE - node_normalized_cost
+```go
+// NormalizeScore : normalize scores
+func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
+	// Lower scores correspond to lower latency
+	// Get Min and Max Scores to normalize between framework.MaxNodeScore and framework.MinNodeScore
+	minCost, maxCost := GetMinMaxScores(scores)
+
+	for i, nodeScore := range scores {
+		if maxCost != minCost { // Avoid division by 0
+			// node_normalized_cost = MAX_SCORE * ( ( nodeScore - minCost) / (maxCost - minCost)
+			// nodeScore = MAX_SCORE - node_normalized_cost
+			scores[i].Score = framework.MaxNodeScore - (framework.MaxNodeScore * (nodeScore.Score - minCost/(maxCost-minCost)))
+		} else { // If maxCost = minCost
+			scores[i].Score = framework.MaxNodeScore - (framework.MaxNodeScore * (nodeScore.Score - minCost))
+		}
+	}
+	return nil
+}
 ```
-
-Thus, nodes with lower costs are favored. 
 
 ![scoreExample](figs/scoreExample.png)
 
@@ -1047,16 +1114,16 @@ Unit tests and Integration tests will be added.
 
 *   Will enabling / using this feature result in increasing time taken by any operations covered by [existing SLIs/SLOs](https://git.k8s.io/community/sig-scalability/slos/slos.md#kubernetes-slisslos)? 
 
-    It should be a negligible increase concerning execution time since our scoring plugin extracts topology information from the NetTopology CRD 
+    It should be a negligible increase concerning execution time since our scoring plugin extracts topology information from the NetworkTopology CRD 
     and application information from the AppGroup CRD. 
-    All network weights are pre-calculated by the controller and updated in the status part of the CRD to minimize the overhead of the scoring plugin. 
+    All network weights are pre-calculated by the controller and updated in the status part of the CRDs to minimize the overhead of the scoring plugin. 
     We will perform several experiments to evaluate the impact of our design.
 
 *   Will enabling / using this feature result in non-negligible increase of resource usage (CPU, RAM, disk, IO, ...) in any components? 
 
     No - Metrics / Information are available in both CRDs and only pulled by our plugins when needed. 
     It should be a negligible increase in terms of resource usage. Experiments are planned to evaluate the overhead of the 
-    Netperf component and both controllers (AppGroup CRD and NetTopology CRD).  
+    Netperf component and both controllers (AppGroup CRD and NetworkTopology CRD).  
     In addition, the algorithms provided run in linear and logarithmic time for the number of nodes.
 
 
@@ -1082,4 +1149,4 @@ TO DO
 
 - 2021-9-9: Presentation to the Kubernetes sig-scheduling community. 
 Received feedback and comments on the design and implementation. Recording available [here](https://youtu.be/D9jSqUiaq1Q). 
-- 2021-9-30: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
+- 2021-10-11: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
