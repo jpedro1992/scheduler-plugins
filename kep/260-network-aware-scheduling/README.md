@@ -82,17 +82,17 @@ This work significantly extends the previous work open-sourced [here](https://gi
 - Establish a specific order to allocate Pods based on their AppGroup CRD.
     - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering.)
 - The advertising of the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/): 
-    - bandwidth requests and limitations allow to filter overloaded nodes (bandwidth) considered for scheduling.
+    - bandwidth requests and limitations allow filtering overloaded nodes (bandwidth) considered for scheduling.
     - consider bandwidth requests for scoring plugins (e.g., `MostRequested`, `BalancedAllocation`) 
 - Evaluate the risk of allocating pods on nodes based on their current demand (network bandwidth).
     - Implementation of a **Filter** plugin based on the [Trimaran load-aware scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).    
 - Near-optimal scheduling decisions based on latency:
-    - Implementation of **Score** plugins based on the [Dijkstra Shortest Path calculation](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/).
+    - Implementation of a **Score** plugin based on the [Dijkstra Shortest Path calculation](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/).
 
 ## Non-Goals
 
 - Descheduling due to unexpected outcomes is not addressed in the initial design.
-- As the default option, we plan to combine our plugin with other scoring functions: `RequestedToCapacityRatio` and `BalancedAllocation`. A higher weight must be given to our plugin ensuring low latency is preferred. 
+- We plan to combine our plugin with other scoring functions: `RequestedToCapacityRatio` and `BalancedAllocation`. A higher weight must be given to our plugin ensuring low latency is preferred. 
 Further evaluations will follow to measure the impact / interoperability with other plugins but are out of the scope of the initial design.   
 
 ## Use cases / Topologies 
@@ -104,7 +104,7 @@ We believe that our plugin finds the best nodes for pod allocations concerning l
 ### 1 - Cluster 
 
 Even small cluster topologies benefit from our plugins. 
-Network weights can be different among the nodes in the infrastructure, impacting the application's response time. 
+Network latency can be different among the nodes in the infrastructure, impacting the application's response time. 
 If latency or bandwidth are not considered in the scheduling process, pods from the same application can be allocated 
 far from each other, increasing response time. 
 Or even pods can be allocated on overloaded nodes (i.e., high incoming traffic), causing performance degradation. 
@@ -124,7 +124,8 @@ Also, bandwidth plays an important role since pods can be allocated in the same 
 ### 3 - Multi-Region
 
 Multi-region or Geo-distributed scenarios benefit the most from our plugins. 
-High latency is a big concern in these topologies, especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/))
+High latency is a big concern in these topologies, 
+especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/)).
 
 ![multiregion](figs/multi_region.png)
 
@@ -151,17 +152,16 @@ and consider bandwidth and latency in the scheduling process.
 ## Overview of the System Design
 
 As an initial design, we plan to implement three plugins:  
-- A **QueueSort** function called `TopologicalSort`. 
+- A **QueueSort** function named`TopologicalSort`. 
 - A **Filter** function called `CheckRiskNodebandwidth`. 
 - A **Score** function called `NetworkMinCost`. 
 
 First, pods are sorted based on their established dependencies. Then, candidate nodes are filtered out based on their current network bandwidth to remove nodes with high incoming traffic. Lastly, nodes are scored based on network weights ensuring network latency is 
 minimized for pods belonging to the same application. 
 
-This is established via a [Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/)
-called Application Group (AppGroup).
+A[Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) has been designed to establish an Application Group (AppGroup CRD). 
 
-Also, another CRD named NetworkTopology (NetworkTopology) maps the infrastructure into zones and nodes so that network weights can be calculated and then used by the scoring plugin. 
+Also, another CRD (NetworkTopology CRD) maps the infrastructure into zones and nodes so that network weights can be calculated and then used by the scoring plugin. 
 
 Further explanations are given below on how the proposed plugins interact with both CRDs. 
 
@@ -169,9 +169,9 @@ Further explanations are given below on how the proposed plugins interact with b
 
 ## Application Group CRD (AppGroup)
 
-We designed an AppGroup CRD for service chains based on the [Pod Group](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/kep/42-podgroup-coscheduling) concept introduced for the [Co-scheduling](https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/pkg/coscheduling/README.md) plugin. 
-The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different pods.
-The goal is to establish pod dependencies based on service topology information and record pod allocations (i.e, node/pod pairs) under the status part of the CRD. 
+We designed an AppGroup CRD for service chains based on the Pod Group concept introduced for the Co-scheduling plugin. 
+The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different pods based on service topology information. 
+The AppGroup CRD also records pod allocations (i.e., node/pod pairs) under the status part.
 
 ```yaml
 # App Group CRD spec
@@ -336,9 +336,9 @@ spec:
       type: Pod
 ```
 
-An AppGroup controller updates the AppGroup CRD under status regarding pods scheduled in the cluster and topology order. 
-Currently, four algorithms are supported for topological sorting: KahnSort, TarjanSort, ReverseKahn, ReverseTarjan. The implementation is based on the work open-sourced [here](https://github.com/otaviokr/topological-sort) 
-A priority index is given to each pod based on the sorting algorithm. An order equal to 1 means the pod should be allocated first in the AppGroup.
+An AppGroup controller updates the AppGroup CRD regarding the pods already scheduled in the cluster and the preferred topology order for pod allocations. 
+Currently, four algorithms are supported for topological sorting: KahnSort, TarjanSort, ReverseKahn, ReverseTarjan. The implementation is based on the work open-sourced [here](https://github.com/otaviokr/topological-sort).
+An index is given to each pod based on the sorting algorithm. If the index is equal to 1 means the pod should be allocated first in the AppGroup.
 
 ```go
 // AppGroupController is a controller that process App groups using provided Handler interface
@@ -406,7 +406,7 @@ It consists of 10 pods, which we named from P1 - P10.
 ![appGroupTestOnlineBoutique](figs/appGroupTestOnlineBoutique.png)
 
 As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
-We attribute a **priority index** to each pod so that we can evaluate their topology order in the **Less function of the TopologicalSort plugin**.
+We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin**.
 The topology list corresponds to:
 
 ```go
@@ -421,7 +421,11 @@ We also designed a NetworkTopology CRD based on the current [NodeResourceTopolog
 The goal is to map the cluster infrastructure into zones and nodes. Nodes are assigned a different zone or location.  
 Then, under the status part, network costs are updated based on a specified algorithm. 
 
-As a design decision, we plan to deploy a NetworkTopology CRD for each node. We argue that establishing a single CRD for all nodes might reduce the system performance concerning execution time to find the network weights for a given node. In contrast, deploying multiple CRDs will have an impact on memory. We plan to perform experiments to evaluate the performance and feasibility of the NetworkTopology CRD per node. 
+As an initial design, we plan to deploy a single NetworkTopology CRD where all network weights are available. 
+ 
+Experiments will evaluate the performance and feasibility of the network topology CRD. 
+We argue that a single CRD for all nodes might impact the system's performance concerning execution time to find the network weights for 
+a given node while deploying multiple CRDs has an overhead regarding the system's memory to save all CRDs. 
 
 ```yaml
 # Network CRD spec
@@ -541,7 +545,7 @@ status:
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
-  name: worker-1
+  name: net-topology-test
   namespace: test-namespace
 spec:
   topologyAlgorithm: Dijkstra
@@ -567,7 +571,7 @@ spec:
           type: Node
 ```
 
-An NetworkTopology controller updates the CRD under status regarding network weights calculated based on the specified algorithm.   
+A NetworkTopology controller updates the CRD regarding network weights calculated based on the specified algorithm.   
 
 ```go
 // NetworkTopologyController is a controller that process Network Topology using provided Handler interface
@@ -611,11 +615,14 @@ type NetworkTopologyCostList []NetworkTopologyCostInfo
 // NetworkTopologyResourceInfo contains information about one resource type.
 // +protobuf=true
 type NetworkTopologyCostInfo struct {
-	// Name of the origin (e.g., Node Name).
-	Destination string `json:"destination" protobuf:"bytes,1,opt,name=destination"`
+    // Name of the origin (e.g., Node Name).
+	Origin string `json:"origin" protobuf:"bytes,1,opt,name=origin"`
+
+	// Name of the Destination (e.g., Node Name).
+	Destination string `json:"destination" protobuf:"bytes,2,opt,name=destination"`
 
 	// Network Cost
-	Cost int64 `json:"cost" protobuf:"bytes,2,opt,name=cost"`
+	Cost int64 `json:"cost" protobuf:"bytes,3,opt,name=cost"`
 }
 ```
 
@@ -709,19 +716,19 @@ This allows to perform filter / score algorithms (e.g., `PodFitsHostResources`, 
 
 Latency will be monitored through a [netperf](https://github.com/HewlettPackard/netperf) component. 
 Netperf tests will be executed based on the nodes available in the infrastructure. 
-This allows to measure the latency between nodes / zones. 
+This allows measuring the latency between nodes / zones. 
 As an initial design, we are focused on the **90th percentile latency**.
 
 ![netperf](figs/netperf.png)
 
-We plan to create Histograms in [Prometheus](https://prometheus.io/) with the measured values.
+We plan to create histograms in [Prometheus](https://prometheus.io/) with the measured values.
 
-To address scalability concerns, network weights are calculated by the controller (NetworkTopology) under status for each node. 
+To address scalability concerns, network weights are calculated by the controller (NetworkTopology) for the nodes available in the infrastructure. 
 
-The controller builds the network graph based on topology information (i.e., zones, nodes) available in the NetworkTopology CRD 
-and updates the network weights for the given node based on the Netperf measurements available in Prometheus. 
+The controller builds the network graph based on the specified topology information (i.e., zones, nodes) available in the NetworkTopology CRD 
+and updates the network weights for all nodes based on the netperf measurements available in Prometheus. 
 
-The cached graph in the controller is recalculated based on new measurements. These updates can be configured 
+The network graph available in the controller is recalculated based on new measurements. These updates can be configured 
 for a certain period (e.g., every 1 min, every 5 minutes, every 10 minutes). 
 
 As a default algorithm, the [Dijkstra Shortest Path](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/) will be implemented.
@@ -744,9 +751,10 @@ The component will be developed based on [k8s-netperf](https://github.com/leanne
 
 **Extension point: QueueSort**
 
-Pods belonging to an AppGroup should be sorted based on their topological information. 
-The `TopologicalSort` plugin compares the pods' order index available in the AppGroup CRD (status) for the preferred sorting algorithm.  
-If pods do not belong to an AppGroup or to different AppGroups, we follow the strategy of the **less function** provided by the [QoS plugin](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/qos)
+Pods belonging to an AppGroup should be sorted based on their topology information. 
+The `TopologicalSort` plugin compares the pods' index available in the AppGroup CRD for the preferred sorting algorithm.  
+If pods do not belong to an AppGroup or belong to different AppGroups, 
+we follow the strategy of the **less function** provided by the [QoS plugin](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/qos)
 
 ```go
 // Less is the function used by the activeQ heap algorithm to sort pods.
@@ -797,7 +805,7 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 
 Let's consider the Online Boutique application shown previously. 
 The AppGroup consists of 10 pods and the topology order based on the KahnSort algorithm is **P1, P10, P9, P8, P7, P6, P5, P4, P3, P2.**
-The plugin favors low order indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
+The plugin favors low indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
 
 ![queueExample](figs/queueSortExample.png)
 
@@ -806,7 +814,7 @@ The plugin favors low order indexes. Thus, depending on the two pods evaluated i
 **Extension point: Filter**
 
 Allocating pods on nodes without considering their current demand (bandwidth) could be risky. 
-The `CheckRiskNodebandwidth` plugin evaluates the risk of allocating pods on certain nodes based on their network bandwidth (i.e., network I/O). 
+The `CheckRiskNodebandwidth` plugin evaluates the risk of allocating pods on nodes based on their bandwidth usage (i.e., network I/O). 
 It is based on the `LoadVariationRiskBalancing` plugin developed for the [Trimaran scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).
 
 The plugin employs the `load-watcher` component to collect measurements from the nodes as described [here](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).
@@ -818,12 +826,13 @@ It is given by
 node_risk = [avg + margin * std^{1/sensitivity}] / 2
 ```
 
-The two parameters: **margin**​ and **sensitivity**​, impact the amount of risk due to bandwidth variation. 
+The two parameters: **margin**​ and **sensitivity**​, impact the node risk due to bandwidth variation. 
 To magnify the impact of low variations, the **std** quantity is raised to a fractional power with the **sensitivity** parameter being the root power, while the **margin** parameter scales the variation quantity. 
+
 The recommended values for the margin​ and sensitivity parameters are 1 and 2, respectively. 
 Each of the two added terms is bounded between 0 and 1. Then, dividing by 2 normalizes the node risk between 0 and 1.
 
-Then, if the **node_risk** is higher than the `RiskThreshold` defined in the scheduler config file, the node is removed and not considered for scoring. 
+Then, if the **node_risk** is higher than the `RiskThreshold` defined in the plugin config file, the node is removed and not considered for scoring. 
 
 ```go
 func (rs *resourceStats) evaluateRisk(margin float64, sensitivity float64, riskThreshold float64) bool {
@@ -871,8 +880,11 @@ In summary, the `CheckRiskNodebandwidth` plugin filters out nodes with a high ri
 
 Let's consider that our cluster has three nodes`N1 - N3`, and the pod to be scheduled has a bandwidth requirement of 100 Mbps (Bandwidth). 
 All nodes have a link capacity of 1 Gbps.
-The mean (M) and standard deviation (V) are extracted from the load-watcher component. Otherwise, we assume that M and V are the requested amount and zero, respectively.
+
+The mean (M) and standard deviation (V) are extracted from the load-watcher component. 
+Otherwise, we assume that M and V are the requested amount and zero, respectively.
 The `node_risk` is calculated for all nodes. 
+
 As a result, both `N1`, `N2` will be considered for scoring, 
 while `N3` is filtered out due to its **high risk (0.787).**
 
@@ -882,11 +894,11 @@ while `N3` is filtered out due to its **high risk (0.787).**
 
 **Extension point: Score**
 
-We propose a scoring plugin called `NetworkMinCost` to favor nodes with the lowest combined cost based on the pod AppGroup.
+We propose a scoring plugin called `NetworkMinCost` to favor nodes with the lowest combined shortest path cost based on the pod AppGroup.
 
-Pod allocations (pod name, pod id, pod hostname) are available in the AppGroup CRD updated by the controller under the status part. 
+Pod allocations (pod name, pod id, pod hostname) are available in the AppGroup CRD updated by the controller. 
 
-Network weights are available in the NetworkTopology CRD updated by the controller based on the Netperf measurements in Prometheus. 
+Network weights are available in the NetworkTopology CRD updated by the controller based on netperf measurements available through Prometheus. 
  
 If not a single pod belonging to the same AppGroup has been already allocated, 
 we score all candidate nodes equally: 
@@ -901,7 +913,7 @@ if len(agName) == 0 { // Score all nodes equally
 }
 ```
 
-We plan to combine our scoring plugin with resource scoring plugins (e.g., `BalancedAllocation`, `LeastRequestedPriority`). 
+We plan to combine our scoring plugin with other scoring plugins (e.g., `BalancedAllocation`, `LeastRequestedPriority`, etc). 
 We will attribute a higher weight to our plugin to prefer decisions focused on low latency. 
 For instance, consider the following scheduler policy config file as an example:
 
@@ -924,20 +936,20 @@ For instance, consider the following scheduler policy config file as an example:
 ]
 }
 ```
-  
+
 #### Example
 
 ##### Build the Network Graph 
 
 Let's consider that our cluster has five nodes `N1 - N5` and three zones `Z1 - Z3`.
-As an example, the spec definition of the NetworkTopology CRD for worker-1 is the following: 
+As an example, the spec definition of the NetworkTopology CRD is the following: 
 
 ```yaml
 # Example Network CRD 
 apiVersion: topology.node.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
-  name: worker-1
+  name: net-topology-test
   namespace: test-namespace
 spec:
   topologyAlgorithm: Dijkstra
@@ -963,10 +975,10 @@ spec:
           type: Node
 ```
 
-And at a given moment, the status part of the NetworkTopology CRDs is the following:
+And at a given moment, the status part of the NetworkTopology CRD is the following:
 
 ```yaml
-# Status from NetworkTopology CRD worker-1 
+# Status from NetworkTopology CRD 
 (...)
           status:
             properties:
@@ -974,65 +986,27 @@ And at a given moment, the status part of the NetworkTopology CRDs is the follow
                 algorithmName: Dijkstra
                 - costList:
                   items:
-                    - destination: worker-2
+                    - origin: worker-1
+                      destination: worker-2
                       cost: 1
-                    - destination: worker-3
+                    - origin: worker-1
+                      destination: worker-3
                       cost: 4
-# Status from NetworkTopology CRD worker-2 
-(...)
-          status:
-            properties:
-              weights:
-                algorithmName: Dijkstra
-                - costList:
-                  items:
-                    - destination: worker-1
-                      cost: 1
-                    - destination: worker-4
+                    - origin: worker-2
+                      destination: worker-4
                       cost: 6
-# Status from NetworkTopology CRD worker-3 
-(...)
-          status:
-            properties:
-              weights:
-                algorithmName: Dijkstra
-                - costList:
-                  items:
-                    - destination: worker-1
-                      cost: 4
-                    - destination: worker-4
+                    - origin: worker-3
+                      destination: worker-4
                       cost: 5
-                    - destination: worker-5
+                    - origin: worker-3
+                      destination: worker-5
                       cost: 3
-# Status from NetworkTopology CRD worker-4 
-(...)
-          status:
-            properties:
-              weights:
-                algorithmName: Dijkstra
-                - costList:
-                  items:
-                    - destination: worker-2
-                      cost: 6
-                    - destination: worker-3
-                      cost: 5
-                    - destination: worker-5
-                      cost: 2
-# Status from NetworkTopology CRD worker-5 
-(...)
-          status:
-            properties:
-              weights:
-                algorithmName: Dijkstra
-                - costList:
-                  items:
-                    - destination: worker-3
-                      cost: 3
-                    - destination: worker-4
+                    - origin: worker-4
+                      destination: worker-5
                       cost: 2
 ```
 
-Based on the NetworkTopology CRDs, the controller will create the following network graph:
+Based on the NetworkTopology CRD, the controller will create the following network graph:
  
 ![graph](figs/graph.png)
 
@@ -1097,14 +1071,13 @@ The accumulated cost is returned as the score:
 ```go
 var cost int64 = 0
 // calculate accumulated shortest path, network weighs available in the NetworkTopology CRD
-	
 for _, podAllocated := range appGroup.Status.Scheduled { // For each pod already allocated
 	for _, dependencyName := range dependencyList { // For each pod dependency
 		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
 			for _, w := range networkTopology.Status.Weights { // Check the weights List
 				if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
 					for _, c := range w.CostList { // For each costInfo in CostList
-						if c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
+                        if c.Origin == nodeName && c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
 							cost += c.Cost // Add the cost to the sum
 						}
 					}
