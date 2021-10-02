@@ -1071,16 +1071,16 @@ The accumulated cost is returned as the score:
 ```go
 var cost int64 = 0
 // calculate accumulated shortest path, network weighs available in the NetworkTopology CRD
-for _, podAllocated := range appGroup.Status.Scheduled { // For each pod already allocated
+for _, podAllocated := range appGroup.Status.Scheduled { // For each pod already allocated 
 	for _, dependencyName := range dependencyList { // For each pod dependency
 		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
 			for _, w := range networkTopology.Status.Weights { // Check the weights List
 				if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
 					for _, c := range w.CostList { // For each costInfo in CostList 
-				        if c.Origin == nodeName && c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
-							cost += c.Cost // Add the cost to the sum
-						}
-					}
+					    if c.Origin == nodeName && c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
+					        cost += c.Cost // Add the cost to the sum
+					    }
+				    }
 				}
 			}
 		}
