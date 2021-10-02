@@ -436,9 +436,9 @@ metadata:
     api-approved.kubernetes.io: "To be Defined" # edited manually
     controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
-  name: networkTopology.scheduling.sigs.k8s.io # OR networkTopology.topology.node.k8s.io?
+  name: networkTopology.scheduling.sigs.k8s.io
 spec:
-  group: scheduling.sigs.k8s.io # OR topology.node.k8s.io?
+  group: scheduling.sigs.k8s.io 
   names:
     kind: NetworkTopology
     listKind: NetworkTopologyList
@@ -452,7 +452,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NetworkTopology describes the node topology information.
+        description: Network Topology describes the cluster network topology.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -472,6 +472,16 @@ spec:
               topologyAlgorithm:
                 type: string
                 description: The algorithm for weight calculation (Status)
+              freqUpdate:
+                type: integer
+                description: The frequency update of the network costs (e.g., every 1 min, every 5 min, every 10 min ...)
+                format: int64
+                minimum: 1
+              timeRangeInMinutes:
+                type: integer
+                description: The time range used for weight calculation (Status)
+                format: int64
+                minimum: 1
               zones:
                 description: ZoneList contains an array of Zones in the infrastructure.
                 items:
@@ -494,11 +504,15 @@ spec:
                           type:
                             type: string
                             description: Type of the resource (e.g., node).
+                          interface:
+                            type: string
+                              description: The interface of the node used for network cost calculation.
                       type: object
                   type: array
                 required:
                 - name
                 - type
+                - interface
                 type: object
           status:
             description: Record Network Weights among zones and nodes.
@@ -514,6 +528,9 @@ spec:
                     description: Record weights for several nodes based on the algorithm
                       type: object
                       properties:
+                        origin:
+                          type: string
+                          description: Node / zone name (Origin)
                         destination:
                           type: string
                           description: Node / zone name (Destination)
@@ -522,7 +539,7 @@ spec:
                           default: 0
                           minimum: 0
                           format: int64
-                          description: Cost from Origin (Node) to Destination (Node / Zone)
+                          description: Cost from Origin to Destination
                         type: object
             type: object
         type: object
@@ -549,26 +566,33 @@ metadata:
   namespace: test-namespace
 spec:
   topologyAlgorithm: Dijkstra
+  freqUpdate: 5
+  timeRangeInMinutes: 30 
   zones:
     - name: z1
       type: Zone
       resources:
         - name: worker-1
           type: Node
+          interface: eth0
         - name: worker-2
           type: Node
+          interface: ens192
     - name: z2
       type: Zone
       resources:
         - name: worker-3
           type: Node
+          interface: ens192
     - name: z3
       type: Zone
       resources:
         - name: worker-4
           type: Node
+          interface: eth0
         - name: worker-5
           type: Node
+          interface: ens192
 ```
 
 A NetworkTopology controller updates the CRD regarding network weights calculated based on the specified algorithm.   
@@ -583,6 +607,7 @@ type NetworkTopologyController struct {
 	ntListerSynced   cache.InformerSynced
 	nodeListerSynced cache.InformerSynced
 	ntClient         schedclientset.Interface
+    
 }
 ```
 
@@ -946,33 +971,40 @@ As an example, the spec definition of the NetworkTopology CRD is the following:
 
 ```yaml
 # Example Network CRD 
-apiVersion: topology.node.k8s.io/v1alpha1
+apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
   name: net-topology-test
   namespace: test-namespace
 spec:
   topologyAlgorithm: Dijkstra
+  freqUpdate: 5
+  timeRangeInMinutes: 30 
   zones:
     - name: z1
       type: Zone
       resources:
         - name: worker-1
           type: Node
+          interface: eth0
         - name: worker-2
           type: Node
+          interface: ens192
     - name: z2
       type: Zone
       resources:
         - name: worker-3
           type: Node
+          interface: ens192
     - name: z3
       type: Zone
       resources:
         - name: worker-4
           type: Node
+          interface: eth0
         - name: worker-5
           type: Node
+          interface: ens192
 ```
 
 And at a given moment, the status part of the NetworkTopology CRD is the following:
