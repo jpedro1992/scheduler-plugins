@@ -1076,8 +1076,8 @@ for _, podAllocated := range appGroup.Status.Scheduled { // For each pod already
 		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
 			for _, w := range networkTopology.Status.Weights { // Check the weights List
 				if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
-					for _, c := range w.CostList { // For each costInfo in CostList
-                        if c.Origin == nodeName && c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
+					for _, c := range w.CostList { // For each costInfo in CostList 
+				        if c.Origin == nodeName && c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
 							cost += c.Cost // Add the cost to the sum
 						}
 					}
