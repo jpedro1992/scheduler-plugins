@@ -24,6 +24,7 @@
     - [Description of the `TopologicalSort` Algorithm](#description-of-the-topologicalsort-algorithm)
     - [Description of the `CheckRiskNodeBandwidth` Algorithm](#description-of-the-checkrisknodebandwidth-algorithm)
     - [Description of the `NetworkMinCost` Algorithm](#description-of-the-networkmincost-algorithm)
+- [Prerequisites](#prerequisites)
 - [Known limitations](#known-limitations)
 - [Test plans](#test-plans)
 - [Production Readiness Review Questionnaire](#production-readiness-review-questionnaire)
@@ -39,12 +40,18 @@
 
 # Summary
 
-This document describes the behaviour of the Network-Aware Scheduling framework 
-that considers latency and bandwidth in the scheduling decision making process.
-Service topology information (e.g., Pod dependencies) is established via an **AppGroup CRD**, 
-while network topology information (e.g., network weights) is provided through a **NetworkTopology CRD**.
-Bandwidth resources are advertised as **extended resources**. Several plugins are planned including: 
-`TopologicalSort`, `CheckRiskNodebandwidth` and `NetworkMinCost`.  
+This document describes the behavior of the Network-Aware Scheduling framework 
+that considers latency and bandwidth in the scheduling decision-making process.
+
+An **AppGroup CRD** establishes service topology information (e.g., Pod dependencies) to ensure different pods correspond to an application and their dependencies are considered in the scheduling process.
+
+A **NetworkTopology CRD** provides network topology information (e.g., network weights) to be used by our plugins to find nodes for pod allocations that aim to reduce latency in the AppGroup. 
+
+Bandwidth resources are advertised as **extended resources** to 
+ensure available filter/score plugins (e.g., `PodFitsResources`, `BalancedAlocation`) consider bandwidth as a resource.
+
+Several plugins will be developed for our framework, including: 
+`TopologicalSort` (**QueueSort**), `CheckRiskNodebandwidth` (**Filter**) and `NetworkMinCost` (**Score**).  
 
 # Motivation
 
@@ -729,7 +736,7 @@ We also aim to study the frequency of the Netperf measurements and the trade-off
  
 At a later stage, other algorithms for weight calculation can be added and supported (e.g., [Bellman Ford](https://www.geeksforgeeks.org/bellman-ford-algorithm-dp-23/)).
 
-The component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!!!)
+The component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!)
 
 ## Network-Aware Plugins
 
@@ -1139,6 +1146,27 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 
 ![scoreExample](figs/scoreExample.png)
 
+# Prerequisites
+
+This section describes the third-party components needed for our framework.
+
+## Bandwidth
+
+Bandwidth resources will be advertised as extended resources based on a bandwidth resource component open-sourced [here](ADD LINK TO REPO!). 
+Bandwidth limitations will be enforced through the bandwidth CNI plugin. By installing [Calico](https://docs.projectcalico.org/reference/cni-plugin/configuration) as the networking 
+plugin, the bandwidth CNI plugin is already installed as default.
+
+## Netperf 
+
+As mentioned previously, a netperf component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) 
+and open-sourced [here](ADD LINK TO REPO!). The NetworkTopology controller and the `NetworkMinCost` plugin need 
+accurate latency measurements to find nodes that reduce latency for AppGroups. 
+
+## Prometheus
+
+We plan to use Prometheus as our metrics provider. 
+For example, in our experiments, we will install [Kube-prometheus](https://github.com/prometheus-operator/kube-prometheus).
+
 # Known limitations
 
 - CRDs installation:
@@ -1162,9 +1190,10 @@ Unit tests and Integration tests will be added:
     - For both CRDs (AppGroup and NetworkTopology) concerning the controllers and respective informers.
     - For all plugins: `TopologicalSort`, `CheckRiskNodebandwidth` and `NetworkMinCost`.
 - Integration Tests
-    - Default configurations (plugins enabled / disabled)
-    - Impact on the scheduling flow (performance, resource usage)
+    - Default configurations (plugins enabled / disabled).
+    - Impact of both plugins in the scheduling flow (performance, resource usage).
     - Impact of both CRDs (AppGroup and NetworkTopology).
+    - Impact of the netperf component (performance, frequency measurement, accuracy).
 - End-to-end tests
     - Comprehensive E2E testing would graduate the framework from Alpha to Beta.
 
