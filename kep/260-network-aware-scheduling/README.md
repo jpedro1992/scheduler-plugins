@@ -607,11 +607,26 @@ type NetworkTopologyController struct {
 	ntListerSynced   cache.InformerSynced
 	nodeListerSynced cache.InformerSynced
 	ntClient         schedclientset.Interface
-    
+	prometheus       *util.PrometheusHandle
 }
 ```
 
 ```go
+// NetworkTopologySpec represents the template of a NetworkTopology.
+type NetworkTopologySpec struct {
+	// The algorithm for weight calculation
+	TopologyAlgorithm	string `json:"topologyAlgorithm,omitempty"`
+
+	// The frequency update of the network costs (e.g., every 1 min, every 5 min, every 10 min ...)
+	FreqUpdate 			int64	`json:"freqUpdate,omitempty"`
+
+	// The time range used for weight calculation in the Prometheus Query
+	TimeRangeInMinutes	int64	`json:"timeRangeInMinutes,omitempty"`
+
+	// Zones defines the zones/nodes in the infrastructure
+	Zones NetworkTopologyZoneList `json:"zones,omitempty"`
+}
+
 // NetworkTopologyStatus represents the current state of a Network Topology.
 type NetworkTopologyStatus struct {
 	// The calculated weights in the topology.
