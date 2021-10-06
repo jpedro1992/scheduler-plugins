@@ -440,91 +440,97 @@ metadata:
   creationTimestamp: null
   name: networkTopology.scheduling.sigs.k8s.io
 spec:
-  group: scheduling.sigs.k8s.io 
+  group: scheduling.sigs.k8s.io
   names:
     kind: NetworkTopology
     listKind: NetworkTopologyList
     plural: networktopologies
     shortNames:
-    - net-topo
-    - nt
+      - net-topo
+      - nt
     singular: networktopology
   scope: Namespaced
   versions:
-  - name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: Network Topology describes the cluster network topology.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Network Topology describes the cluster network topology.
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation
               of an object. Servers should convert recognized schemas to the latest
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
               submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            type: object
-            properties:
-              prometheusAddress:
-                type: string
-                description: The prometheus address. For example, http://prometheus-k8s.monitoring.svc.cluster.local:9090
-              topologyAlgorithm:
-                type: string
-                description: The algorithm for weight calculation (Status)
-              freqUpdate:
-                type: integer
-                description: The frequency update of the network costs (e.g., every 1 min, every 5 min, every 10 min ...)
-                format: int64
-                minimum: 1
-              timeRangeInMinutes:
-                type: integer
-                description: The time range used for the prometheus query
-                format: int64
-                minimum: 1
-          status:
-            description: Record Network Weights among zones and nodes.
-            properties:
-              nodeCount:
-                description: The total number of nodes in the cluster
-                type: int64
-              weightCalculationTime:
-                description: weightCalculationTime of the weights
-                format: date-time
-                type: string
-              weights:
-                type: array
-                description: weightList contains an array of weightInfo objects.
-                items:
-                  algorithmName:
-                    type: string
-                    description: Algorithm Name
-                  costList:
-                    description: Record weights for several nodes based on the algorithm
-                      type: object
-                      properties:
-                        origin:
-                          type: string
-                          description: Node / zone name (Origin)
-                        destination:
-                          type: string
-                          description: Node / zone name (Destination)
-                        cost:
-                          type: integer
-                          default: 0
-                          minimum: 0
-                          format: int64
-                          description: Cost from Origin to Destination
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              properties:
+                prometheusAddress:
+                  type: string
+                  description: The prometheus address. For example, http://prometheus-k8s.monitoring.svc.cluster.local:9090
+                topologyAlgorithm:
+                  type: string
+                  description: The algorithm for weight calculation (Status)
+                freqUpdate:
+                  type: integer
+                  description: The frequency update of the network costs (e.g., every 1 min, every 5 min, every 10 min ...)
+                  format: int64
+                  minimum: 1
+                timeRangeInMinutes:
+                  type: integer
+                  description: The time range used for the prometheus query
+                  format: int64
+                  minimum: 1
+            status:
+              description: Record Network Weights among zones and nodes.
+              properties:
+                nodeCount:
+                  description: The total number of nodes in the cluster
+                  type: int64
+                weightCalculationTime:
+                  description: weightCalculationTime of the weights
+                  format: date-time
+                  type: string
+                weights:
+                  type: array
+                  description: weightList contains an array of weightInfo objects.
+                  items:
+                    algorithmName:
+                      type: string
+                      description: Algorithm Name
+                    costList:
+                      description: Record weights for several nodes based on the algorithm
                         type: object
-            type: object
-        type: object
-    served: true
-    storage: true
+                        properties:
+                          origin:
+                            type: string
+                            description: Node (Origin)
+                          originZone:
+                            type: string
+                              description: Node Zone (Origin)
+                          destination:
+                            type: string
+                            description: Node / zone name (Destination)
+                          destinationZone:
+                            type: string
+                              description: Node Zone (Destination)
+                          cost:
+                            type: integer
+                            default: 0
+                            minimum: 0
+                            format: int64
+                            description: Cost from Origin to Destination
+                          type: object
+              type: object
+          type: object
+      served: true
+      storage: true
 status:
   acceptedNames:
     kind: ""
@@ -620,11 +626,17 @@ type NetworkTopologyWeightInfo struct {
 // NetworkTopologyResourceInfo contains information about one resource type.
 // +protobuf=true
 type NetworkTopologyCostInfo struct {
-    // Name of the origin (e.g., Node Name).
+	// Name of the origin (e.g., Node Name).
 	Origin string `json:"origin" protobuf:"bytes,1,opt,name=origin"`
 
-	// Name of the Destination (e.g., Node Name).
-	Destination string `json:"destination" protobuf:"bytes,2,opt,name=destination"`
+	// Name of the Origin zone (e.g., Node Zone).
+	OriginZone string `json:"originZone" protobuf:"bytes,2,opt,name=originZone"`
+
+	// Name of the destination (e.g., Node Name).
+	Destination string `json:"destination" protobuf:"bytes,3,opt,name=destination"`
+
+	// Name of the Destination zone (e.g., Node Zone).
+	DestinationZone string `json:"destinationZone" protobuf:"bytes,2,opt,name=destinationZone"`
 
 	// Network Cost
 	Cost int64 `json:"cost" protobuf:"bytes,3,opt,name=cost"`
