@@ -636,10 +636,10 @@ type NetworkTopologyCostInfo struct {
 	Destination string `json:"destination" protobuf:"bytes,3,opt,name=destination"`
 
 	// Name of the Destination zone (e.g., Node Zone).
-	DestinationZone string `json:"destinationZone" protobuf:"bytes,2,opt,name=destinationZone"`
+	DestinationZone string `json:"destinationZone" protobuf:"bytes,4,opt,name=destinationZone"`
 
 	// Network Cost
-	Cost int64 `json:"cost" protobuf:"bytes,3,opt,name=cost"`
+	Cost int64 `json:"cost" protobuf:"bytes,5,opt,name=cost"`
 }
 ```
 
