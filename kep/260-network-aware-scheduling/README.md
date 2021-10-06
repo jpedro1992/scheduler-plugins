@@ -165,7 +165,7 @@ Also, another CRD (NetworkTopology CRD) calculates network weights among the nod
 
 Further explanations are given below on how the proposed plugins interact with both CRDs. 
 
-![design](figs/design.png)
+![design](figs/designFramework.png)
 
 ## Application Group CRD (AppGroup)
 
