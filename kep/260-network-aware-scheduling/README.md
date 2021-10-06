@@ -755,9 +755,9 @@ The component will be developed based on [k8s-netperf](https://github.com/leanne
 **Extension point: QueueSort**
 
 Pods belonging to an AppGroup should be sorted based on their topology information. 
-The `TopologicalSort` plugin compares the pods' index available in the AppGroup CRD for the preferred sorting algorithm.  
-If pods do not belong to an AppGroup or belong to different AppGroups, 
-we follow the strategy of the **less function** provided by the [QoS plugin](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/qos).
+The `TopologicalSort` plugin compares the pods' index available in the AppGroup CRD for the preferred sorting algorithm. 
+
+If pods do not belong to an AppGroup or belong to different AppGroups, we follow the strategy of the **less function** provided by the [QoS plugin](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/qos).
 
 ```go
 // Less is the function used by the activeQ heap algorithm to sort pods.
@@ -976,22 +976,34 @@ And at a given moment, the status part of the NetworkTopology CRD is the followi
                 - costList:
                   items:
                     - origin: worker-1
+                      originZone: Z1
                       destination: worker-2
+                      destinationZone: Z1
                       cost: 1
                     - origin: worker-1
+                      originZone: Z1
                       destination: worker-3
+                      destinationZone: Z2
                       cost: 4
                     - origin: worker-2
+                      originZone: Z1
                       destination: worker-4
+                      destinationZone: Z3
                       cost: 6
                     - origin: worker-3
+                      originZone: Z2
                       destination: worker-4
+                      destinationZone: Z3
                       cost: 5
                     - origin: worker-3
+                      originZone: Z2
                       destination: worker-5
+                      destinationZone: Z3
                       cost: 3
                     - origin: worker-4
+                      originZone: Z3
                       destination: worker-5
+                      destinationZone: Z3
                       cost: 2
 ```
 
