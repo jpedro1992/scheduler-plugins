@@ -169,7 +169,7 @@ Also, another CRD (NetworkTopology CRD) calculates network weights among the nod
 
 Further explanations are given below on how the proposed plugins interact with both CRDs. 
 
-<p align="center"><img src="figs/designFramework.png" title="System Design" width="800" class="center"/></p>
+<p align="center"><img src="figs/designFramework.png" title="System Design" width="1000" class="center"/></p>
 
 ## Application Group CRD (AppGroup)
 
@@ -475,9 +475,18 @@ spec:
             spec:
               type: object
               properties:
-                prometheusAddress:
-                  type: string
-                  description: The prometheus address. For example, http://prometheus-k8s.monitoring.svc.cluster.local:9090
+                metricProvider:
+                  type: array
+                  additionalProperties:
+                    type:
+                      type: string
+                      description: The type of the metric provider
+                    address:
+                      type: string
+                      description: The address of the metric provider. For example, http://prometheus-k8s.monitoring.svc.cluster.local:9090
+                    token:
+                      type: string
+                      description: The authentication token of the metric provider.
                 topologyAlgorithm:
                   type: string
                   description: The algorithm for weight calculation (Status)
@@ -488,7 +497,7 @@ spec:
                   minimum: 1
                 timeRangeInMinutes:
                   type: integer
-                  description: The time range used for the prometheus query
+                  description: The time range preferred for the load-watcher metrics
                   format: int64
                   minimum: 1
             status:
@@ -938,7 +947,7 @@ And at a given moment, the status part of the NetworkTopology CRD is the followi
 
 Based on the NetworkTopology CRD, the controller has cached the following network graph:
  
- <p align="center"><img src="figs/graph.png" title="graph" width="800" class="center"/></p>
+ <p align="center"><img src="figs/graph.png" title="graph" width="700" class="center"/></p>
 
 ##### Score nodes for a given pod based on the AppGroup CRD and NetworkTopology CRD
 
