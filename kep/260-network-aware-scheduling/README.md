@@ -76,15 +76,15 @@ This work significantly extends the previous work open-sourced [here](https://gi
     - The creation of an **Application Group (AppGroup) CRD**
 - Define network weights for each node / zone in the cluster:
     - The creation of a **Network Topology (NetworkTopology) CRD**: 
-- Establish a specific order to allocate Pods based on their AppGroup CRD.
-    - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering.)
 - The advertising of the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/): 
     - Bandwidth requests and limitations allow filtering overloaded nodes (bandwidth) considered for scheduling.
     - Consider bandwidth requests for scoring plugins (e.g., `MostRequested`, `BalancedAllocation`) 
-- Evaluate the risk of allocating pods on nodes based on their current demand (network bandwidth).
-    - Implementation of a **Filter** plugin based on the [Trimaran load-aware scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).    
+- Establish a specific order to allocate Pods based on their AppGroup CRD.
+    - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering.)
 - Near-optimal scheduling decisions based on latency:
     - Implementation of a **Score** plugin based on the [Dijkstra Shortest Path calculation](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/).
+- Evaluate the risk of allocating pods on nodes based on their current demand (network bandwidth).
+    - Implementation of a **Filter** plugin based on the [Trimaran load-aware scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).    
 
 ## Non-Goals
 
@@ -99,9 +99,9 @@ Further evaluations will follow to measure the impact / interoperability with ot
 Efficient pod allocations depend on the infrastructure topology and correspondent resources. 
 Data centers and even small cluster topologies benefit from our network-aware framework. 
 
-<p align="center"><img src="figs/cluster.png" title="Cluster Topology" width="800" class="center"/></p>
+<p align="center"><img src="figs/cluster.png" title="Cluster Topology" width="600" class="center"/></p>
 
-<p align="center"><img src="figs/data_center.png" title="DC Topology" width="800" class="center"/></p>
+<p align="center"><img src="figs/data_center.png" title="DC Topology" width="600" class="center"/></p>
 
 Network latency can be different among the nodes in the infrastructure, impacting the application's response time. 
 Latency is a critical requirement for several applications (e.g., [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
@@ -110,7 +110,7 @@ Also, bandwidth plays an important role since pods can be allocated on overloade
 This work focuses on microservice dependencies inspired by Service Function Chaining. 
 For example, in the Redis cluster application, there are several dependencies among the masters and the slaves:
 
-<p align="center"><img src="figs/redis.png" title="Redis app" width="800" class="center"/></p>
+<p align="center"><img src="figs/redis.png" title="Redis app" width="600" class="center"/></p>
 
 ### 2 - Cloud2Edge application running on a multi-region geo-distributed cluster.
 
@@ -121,7 +121,7 @@ Multi-region or Geo-distributed scenarios benefit the most from our framework an
 High latency is a big concern in these topologies, especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/)). 
 For example, in the Cloud2Edge platform, there are several dependencies among the several APIs and MQTT brokers where devices connect to:
 
-<p align="center"><img src="figs/cloud2edge.png" title="Cloud2Edge" width="800" class="center"/></p>
+<p align="center"><img src="figs/cloud2edge.png" title="Cloud2Edge" width="600" class="center"/></p>
 
 # Prerequisites
 
@@ -312,7 +312,7 @@ status:
 
 ### Example
 
-![chain](figs/chain.png)
+<p align="center"><img src="figs/chain.png" title="Chain" width="600" class="center"/></p>
 
 ```yaml
 # Example App Group CRD spec
@@ -406,7 +406,7 @@ type TopologyList []AppGroupTopology
 In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
 It consists of 10 pods, which we named from P1 - P10. 
 
-![appGroupTestOnlineBoutique](figs/appGroupTestOnlineBoutique.png)
+<p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="600" class="center"/></p>
 
 As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
 We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-algorithm).
@@ -416,7 +416,7 @@ The topology list corresponds to:
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
 ```
 
-![appGroupTest](figs/appGroupTest.png)
+<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="618" class="center"/></p>
 
 ## Network Topology CRD (NetworkTopology)
 
@@ -738,7 +738,7 @@ Netperf tests will be executed based on the nodes available in the infrastructur
 This allows measuring the latency between nodes / zones. 
 As an initial design, we are focused on the **90th percentile latency**.
 
-![netperf](figs/netperf.png)
+<p align="center"><img src="figs/netperf.png" title="netperf" width="600" class="center"/></p>
 
 We plan to create histograms in [Prometheus](https://prometheus.io/) with the measured values.
 
@@ -824,7 +824,7 @@ Let's consider the Online Boutique application shown previously.
 The AppGroup consists of 10 pods and the topology order based on the KahnSort algorithm is **P1, P10, P9, P8, P7, P6, P5, P4, P3, P2.**
 The plugin favors low indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
 
-![queueExample](figs/queueSortExample.png)
+<p align="center"><img src="figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
 
 ### Description of the `NetworkMinCost` Algorithm (Alpha)
 
@@ -1060,7 +1060,7 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 }
 ```
 
-![scoreExample](figs/scoreExample.png)
+<p align="center"><img src="figs/scoreExample.png" title="scoreExample" width="600" class="center"/></p>
 
 ### Description of the `CheckRiskNodebandwidth` Algorithm (Beta)
 
@@ -1142,7 +1142,7 @@ The `node_risk` is calculated for all candidate nodes.
 As a result, both `N1`, `N2` will be considered for scoring, 
 while `N3` is filtered out due to its **high risk (0.787).**
 
-![filterExample](figs/filterExample.png)
+<p align="center"><img src="figs/filterExample.png" title="filterExample" width="600" class="center"/></p>
 
 # Known limitations
 
@@ -1244,4 +1244,4 @@ Unit tests and Integration tests will be added:
 
 - 2021-9-9: Presentation to the Kubernetes sig-scheduling community. 
 Received feedback and comments on the design and implementation. Recording available [here](https://youtu.be/D9jSqUiaq1Q). 
-- 2021-10-11: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
+- 2021-10-15: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
