@@ -8,10 +8,9 @@
   - [Goals](#goals)
   - [Non-Goals](#non-goals)
 - [Use cases/Topologies](#use-cases--topologies)
-  - [1 - Cluster](#1---cluster)
-  - [2 - Data Center (DC)](#2---data-center-dc)
-  - [3 - Multi-Region](#3---multi-region)
-  - [Conclusion](#conclusion)
+  - [1 - Spark/Database applications running in Data centers or small scale cluster topologies](#1---sparkdatabase-applications-running-in-data-centers-or-small-scale-cluster-topologies)
+  - [2 - Cloud2Edge application running on a multi-region geo-distributed cluster](#2---cloud2edge-application-running-on-a-multi-region-geo-distributed-cluster)
+- [Prerequisites](#prerequisites)
 - [Proposal - Design & Implementation Details](#proposal---design--implementation-details)
   - [Overview of the System Design](#overview-of-the-system-design)
   - [Application Group CRD (AppGroup)](#application-group-crd-appgroup)
@@ -21,10 +20,9 @@
     - [Bandwidth Limitations via the Bandwidth CNI plugin](#bandwidth-limitations-via-the-bandwidth-cni-plugin)
   - [Netperf component](#netperf-component---measuring-latency-in-the-cluster)  
   - [Plugins](#plugins)
-    - [Description of the `TopologicalSort` Algorithm](#description-of-the-topologicalsort-algorithm)
-    - [Description of the `CheckRiskNodeBandwidth` Algorithm](#description-of-the-checkrisknodebandwidth-algorithm)
-    - [Description of the `NetworkMinCost` Algorithm](#description-of-the-networkmincost-algorithm)
-- [Prerequisites](#prerequisites)
+    - [Description of the `TopologicalSort` Algorithm (Alpha)](#description-of-the-topologicalsort-algorithm-alpha)
+    - [Description of the `NetworkMinCost` Algorithm (Alpha)](#description-of-the-networkmincost-algorithm-alpha)
+    - [Description of the `CheckRiskNodeBandwidth` Algorithm (Beta)](#description-of-the-checkrisknodebandwidth-algorithm-beta)
 - [Known limitations](#known-limitations)
 - [Test plans](#test-plans)
 - [Production Readiness Review Questionnaire](#production-readiness-review-questionnaire)
@@ -34,26 +32,23 @@
 - [Implementation history](#implementation-history)
 <!-- /toc -->
 
-<!-- Comment:
-    - [Description of the `CheckRiskNodebandwidth` Algorithm](#description-of-the-checkrisknodebandwidth-algorithm)
--->
-
 # Summary
 
-This document describes the behavior of the Network-Aware Scheduling framework 
+This proposal describes the behavior of the Network-Aware Scheduling framework
 that considers latency and bandwidth in the scheduling decision-making process.
 
-An **AppGroup CRD** establishes service topology information (e.g., Pod dependencies) to ensure different 
-pods correspond to an application and their dependencies are considered in the scheduling process.
+The proposal introduces two custom resources, **AppGroup CRD** and **NetworkTopology CRD**, to maintain 
+both the service topology information from application microservice dependencies and the infrastructure 
+network topology where network weights between cluster nodes are learned from latency measurements. 
+Thus, both application and infrastructure network topology are considered during scheduling. 
 
-A **NetworkTopology CRD** provides network topology information (e.g., network weights) to be used by our 
-plugins to find nodes for pod allocations that aim to reduce latency in the AppGroup. 
+The proposal also presents a bandwidth resource component (DaemonSet) to advertise bandwidth resources 
+as **extended resources** to allow already available filter/scoring plugins (e.g., `PodFitsResources`, 
+`BalancedAlocation`) to consider bandwidth allocation.
 
-Bandwidth resources are advertised as **extended resources** to 
-ensure available filter/score plugins (e.g., `PodFitsResources`, `BalancedAlocation`) consider bandwidth as a resource.
-
-Several plugins will be developed for our framework, including: 
-`TopologicalSort` (**QueueSort**), `CheckRiskNodebandwidth` (**Filter**) and `NetworkMinCost` (**Score**).  
+To tackle latency in the scheduling process, several plugins are proposed in this document, 
+including: `TopologicalSort` (**QueueSort**), `NetworkMinCost` (**Score**) and
+ `CheckRiskNodebandwidth` (**Filter**). 
 
 # Motivation
 
@@ -99,73 +94,80 @@ Further evaluations will follow to measure the impact / interoperability with ot
 
 ## Use cases / Topologies 
 
-We consider that our plugin is useful in all types of infrastructures. 
-In this document, we analyze in more detail three topologies: **cluster**, **data centers** and **multi-region** infrastructures. 
-We believe that our plugin finds the best nodes for pod allocations concerning latency and bandwidth even under complex constraints (e.g., [pod and zone anti-affinity rules](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)).  
-
-### 1 - Cluster 
-
-Even small cluster topologies benefit from our plugins. 
-Network latency can be different among the nodes in the infrastructure, impacting the application's response time. 
-If latency or bandwidth are not considered in the scheduling process, pods from the same application can be allocated far from each other, increasing response time. 
-Or even pods can be allocated on overloaded nodes (i.e., high incoming traffic), causing performance degradation. 
- 
-![cluster](figs/cluster.png)
-
-### 2 - Data Center (DC)
-
-
-DC topologies should provide high scalability and low latency. 
-Latency is a critical requirement for several applications (e.g., [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
-Also, bandwidth plays an important role since pods can be allocated in the same zone when there is not enough bandwidth for the proper operation of all pods.
-
-![datacenter](figs/data_center.png)
-
-### 3 - Multi-Region
-
-Multi-region or Geo-distributed scenarios benefit the most from our plugins. 
-High latency is a big concern in these topologies, especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/)).
-
-![multiregion](figs/multi_region.png)
-
-### Conclusion
+### 1 - Spark/Database applications running in Data centers or small scale cluster topologies
 
 Efficient pod allocations depend on the infrastructure topology and correspondent resources. 
-Available bandwidth capacity and network delays must be considered in the scheduling process.
-This work focuses on microservice dependencies inspired by Service Function Chaining. 
-An application is composed of different pods with established connections that directly impact the application's performance. 
+Data centers and even small cluster topologies benefit from our network-aware framework. 
 
+<p align="center"><img src="figs/cluster.png" title="Cluster Topology" width="800" class="center"/></p>
+
+<p align="center"><img src="figs/data_center.png" title="DC Topology" width="800" class="center"/></p>
+
+Network latency can be different among the nodes in the infrastructure, impacting the application's response time. 
+Latency is a critical requirement for several applications (e.g., [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
+Also, bandwidth plays an important role since pods can be allocated on overloaded nodes (i.e., high incoming traffic), causing performance degradation.
+
+This work focuses on microservice dependencies inspired by Service Function Chaining. 
 For example, in the Redis cluster application, there are several dependencies among the masters and the slaves:
 
-![redis](figs/redis.png)
+<p align="center"><img src="figs/redis.png" title="Redis app" width="800" class="center"/></p>
 
-Also, in the Cloud2Edge platform, there are several dependencies among the several APIs and MQTT brokers where devices connect to:
+### 2 - Cloud2Edge application running on a multi-region geo-distributed cluster.
 
-![cloud2edge](figs/cloud2edge.png)
+Multi-region or Geo-distributed scenarios benefit the most from our framework and network-aware plugins. 
 
-The following sections describe the main ideas and implementation details to establish service chaining 
-in Kubernetes and consider bandwidth and latency in the scheduling process.
+<p align="center"><img src="figs/multi_region.png" title="MultiRegion Topology" width="600" class="center"/></p>
+
+High latency is a big concern in these topologies, especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/)). 
+For example, in the Cloud2Edge platform, there are several dependencies among the several APIs and MQTT brokers where devices connect to:
+
+<p align="center"><img src="figs/cloud2edge.png" title="Cloud2Edge" width="800" class="center"/></p>
+
+# Prerequisites
+
+This section describes the third-party components needed for our framework.
+
+## Bandwidth
+
+Bandwidth resources will be advertised as extended resources based on a bandwidth resource component open-sourced [here](ADD LINK TO REPO!). 
+Bandwidth limitations will be enforced through the bandwidth CNI plugin. By installing [Calico](https://docs.projectcalico.org/reference/cni-plugin/configuration) as the networking 
+plugin, the bandwidth CNI plugin is already installed as default.
+
+## Netperf 
+
+A netperf component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!). 
+The NetworkTopology controller and the `NetworkMinCost` plugin need accurate latency measurements to find nodes that reduce latency for AppGroups. 
+
+## Prometheus
+
+We plan to use Prometheus as our metrics provider. 
+For example, in our experiments, we will install [Kube-prometheus](https://github.com/prometheus-operator/kube-prometheus).
+
+## Load-watcher
+
+The NetworkTopology controller uses a [load-watcher](https://github.com/paypal/load-watcher) component as a library for the 
+latency measurements. Also, the `CheckRiskNodebandwidth` plugin uses a [load-watcher](https://github.com/paypal/load-watcher) component 
+similar to the Trimaran plugin. Thus, load-watcher can be used as a service or as a library. 
 
 # Proposal - Design & Implementation details
 
 ## Overview of the System Design
 
 As an initial design, we plan to implement three plugins:  
-- A **QueueSort** function named`TopologicalSort`. 
+- A **QueueSort** function named`TopologicalSort`:
+    -  Pods are sorted based on their established dependencies.
+- A **Score** function called `NetworkMinCost`:
+    - Nodes are scored based on network weights ensuring network latency is minimized for pods belonging to the same application.
 - A **Filter** function called `CheckRiskNodebandwidth`. 
-- A **Score** function called `NetworkMinCost`. 
+    - Nodes are filtered out based on their current network bandwidth.
 
-First, pods are sorted based on their established dependencies. 
-Then, candidate nodes are filtered out based on their current network bandwidth to remove nodes with high incoming traffic. 
-Lastly, nodes are scored based on network weights ensuring network latency is minimized for pods belonging to the same application. 
-
-A[Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) has been designed to establish an Application Group (AppGroup CRD). 
+A [Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) has been designed to establish an Application Group (AppGroup CRD). 
 
 Also, another CRD (NetworkTopology CRD) calculates network weights among the nodes / zones in the cluster to be used by the scoring plugin.
 
 Further explanations are given below on how the proposed plugins interact with both CRDs. 
 
-![design](figs/designFramework.png)
+<p align="center"><img src="figs/designFramework.png" title="System Design" width="800" class="center"/></p>
 
 ## Application Group CRD (AppGroup)
 
@@ -760,9 +762,9 @@ At a later stage, other algorithms for weight calculation can be added and suppo
 
 The component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!)
 
-## Network-Aware Plugins
+## Plugins
 
-### Description of the `TopologicalSort` Algorithm
+### Description of the `TopologicalSort` Algorithm (Alpha)
 
 **Extension point: QueueSort**
 
@@ -824,89 +826,7 @@ The plugin favors low indexes. Thus, depending on the two pods evaluated in the 
 
 ![queueExample](figs/queueSortExample.png)
 
-### Description of the `CheckRiskNodebandwidth` Algorithm
-
-**Extension point: Filter**
-
-Allocating pods on nodes without considering their current demand (bandwidth) could be risky. 
-The `CheckRiskNodebandwidth` plugin evaluates the risk of allocating pods on nodes based on their bandwidth usage (i.e., network I/O). 
-It is based on the `LoadVariationRiskBalancing` plugin developed for the [Trimaran scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).
-
-The plugin employs the `load-watcher` component to collect measurements from the nodes as described [here](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).
-
-The (normalized) node risk is defined as a combined measure of the **average** (i.e., avg) and **standard deviation** (i.e., std) of the node bandwidth utilization. 
-It is given by
-
-```latex
-node_risk = [avg + margin * std^{1/sensitivity}] / 2
-```
-
-The two parameters: **margin**​ and **sensitivity**​, impact the node risk due to bandwidth variation. 
-To magnify the impact of low variations, the **std** quantity is raised to a fractional power with the **sensitivity** parameter being the root power, 
-while the **margin** parameter scales the variation quantity. 
-
-The recommended values for the margin​ and sensitivity parameters are 1 and 2, respectively. 
-Each of the two added terms is bounded between 0 and 1. Then, dividing by 2 normalizes the node risk between 0 and 1.
-
-Then, if the **node_risk** is higher than the `RiskThreshold` defined in the plugin config file, the node is removed and not considered for scoring. 
-
-```go
-func (rs *resourceStats) evaluateRisk(margin float64, sensitivity float64, riskThreshold float64) bool {
-    
-    // make sure values are within bounds
-    rs.req = math.Max(rs.req, 0)
-    rs.usedAvg = math.Max(math.Min(rs.usedAvg, rs.capacity), 0)
-    rs.usedStdev = math.Max(math.Min(rs.usedStdev, rs.capacity), 0)
-
-    // calculate average factor
-    mu := (rs.usedAvg + rs.req) / rs.capacity
-    mu = math.Max(math.Min(mu, 1), 0)
-
-    // calculate deviation factor
-    sigma := rs.usedStdev / rs.capacity
-    sigma = math.Max(math.Min(sigma, 1), 0)
-	
-    // apply root power
-    if sensitivity >= 0 {
-	    sigma = math.Pow(sigma, 1/sensitivity)
-    }
-
-    // apply multiplier
-    sigma *= margin
-    sigma = math.Max(math.Min(sigma, 1), 0)
-
-    // Calculate node risk
-    nodeRisk := (mu + sigma) / 2
-    klog.V(6).Infof("mu=%f; sigma=%f; margin=%f; sensitivity=%f; risk=%f", mu, sigma, margin, sensitivity, nodeRisk)
-
-    // Return if the calculated nodeRisk passes the RiskThreshold (bool)
-    return fitsThreshold(riskThreshold, nodeRisk)
-}
-```
-
-Thus, the `CheckRiskNodebandwidth` plugin has the three following configuration parameters:
-
-- `safeVarianceMargin`: Multiplier (non-negative floating point) of standard deviation. (Default: 1)
-- `safeVarianceSensitivity`: Root power (non-negative floating point) of standard deviation. (Default: 2)
-- `RiskThreshold`: The threshold for the node risk (between 0 and 1). Nodes with higher risk are filtered out. (Default: 0.75)
-
-In summary, the `CheckRiskNodebandwidth` plugin filters out nodes with a high risk of the bandwidth exceeding the node available capacity. 
-
-#### Example
-
-Let's consider that our cluster has three nodes `N1 - N3`, and the pod to be scheduled has a bandwidth requirement of 100 Mbps (Bandwidth). 
-All nodes have a link capacity of 1 Gbps.
-
-The mean (M) and standard deviation (V) are extracted from the load-watcher component. 
-Otherwise, we assume that M and V are the requested amount and zero, respectively.
-The `node_risk` is calculated for all candidate nodes. 
-
-As a result, both `N1`, `N2` will be considered for scoring, 
-while `N3` is filtered out due to its **high risk (0.787).**
-
-![filterExample](figs/filterExample.png)
-
-### Description of the `NetworkMinCost` Algorithm
+### Description of the `NetworkMinCost` Algorithm (Alpha)
 
 **Extension point: Score**
 
@@ -1142,32 +1062,87 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 
 ![scoreExample](figs/scoreExample.png)
 
-# Prerequisites
+### Description of the `CheckRiskNodebandwidth` Algorithm (Beta)
 
-This section describes the third-party components needed for our framework.
+**Extension point: Filter**
 
-## Bandwidth
+Allocating pods on nodes without considering their current demand (bandwidth) could be risky. 
+The `CheckRiskNodebandwidth` plugin evaluates the risk of allocating pods on nodes based on their bandwidth usage (i.e., network I/O). 
+It is based on the `LoadVariationRiskBalancing` plugin developed for the [Trimaran scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).
 
-Bandwidth resources will be advertised as extended resources based on a bandwidth resource component open-sourced [here](ADD LINK TO REPO!). 
-Bandwidth limitations will be enforced through the bandwidth CNI plugin. By installing [Calico](https://docs.projectcalico.org/reference/cni-plugin/configuration) as the networking 
-plugin, the bandwidth CNI plugin is already installed as default.
+The plugin employs the `load-watcher` component to collect measurements from the nodes as described [here](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).
 
-## Netperf 
+The (normalized) node risk is defined as a combined measure of the **average** (i.e., avg) and **standard deviation** (i.e., std) of the node bandwidth utilization. 
+It is given by
 
-As mentioned previously, a netperf component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) 
-and open-sourced [here](ADD LINK TO REPO!). The NetworkTopology controller and the `NetworkMinCost` plugin need 
-accurate latency measurements to find nodes that reduce latency for AppGroups. 
+```latex
+node_risk = [avg + margin * std^{1/sensitivity}] / 2
+```
 
-## Prometheus
+The two parameters: **margin**​ and **sensitivity**​, impact the node risk due to bandwidth variation. 
+To magnify the impact of low variations, the **std** quantity is raised to a fractional power with the **sensitivity** parameter being the root power, 
+while the **margin** parameter scales the variation quantity. 
 
-We plan to use Prometheus as our metrics provider. 
-For example, in our experiments, we will install [Kube-prometheus](https://github.com/prometheus-operator/kube-prometheus).
+The recommended values for the margin​ and sensitivity parameters are 1 and 2, respectively. 
+Each of the two added terms is bounded between 0 and 1. Then, dividing by 2 normalizes the node risk between 0 and 1.
 
-## Load-watcher
+Then, if the **node_risk** is higher than the `RiskThreshold` defined in the plugin config file, the node is removed and not considered for scoring. 
 
-The `CheckRiskNodebandwidth` uses a [load-watcher](https://github.com/paypal/load-watcher) component.
-The integration of load-watcher in our plugin is similar to the one followed in the Trimaran plugin. 
-Load-watcher can be used as a service or as a library. 
+```go
+func (rs *resourceStats) evaluateRisk(margin float64, sensitivity float64, riskThreshold float64) bool {
+    
+    // make sure values are within bounds
+    rs.req = math.Max(rs.req, 0)
+    rs.usedAvg = math.Max(math.Min(rs.usedAvg, rs.capacity), 0)
+    rs.usedStdev = math.Max(math.Min(rs.usedStdev, rs.capacity), 0)
+
+    // calculate average factor
+    mu := (rs.usedAvg + rs.req) / rs.capacity
+    mu = math.Max(math.Min(mu, 1), 0)
+
+    // calculate deviation factor
+    sigma := rs.usedStdev / rs.capacity
+    sigma = math.Max(math.Min(sigma, 1), 0)
+	
+    // apply root power
+    if sensitivity >= 0 {
+	    sigma = math.Pow(sigma, 1/sensitivity)
+    }
+
+    // apply multiplier
+    sigma *= margin
+    sigma = math.Max(math.Min(sigma, 1), 0)
+
+    // Calculate node risk
+    nodeRisk := (mu + sigma) / 2
+    klog.V(6).Infof("mu=%f; sigma=%f; margin=%f; sensitivity=%f; risk=%f", mu, sigma, margin, sensitivity, nodeRisk)
+
+    // Return if the calculated nodeRisk passes the RiskThreshold (bool)
+    return fitsThreshold(riskThreshold, nodeRisk)
+}
+```
+
+Thus, the `CheckRiskNodebandwidth` plugin has the three following configuration parameters:
+
+- `safeVarianceMargin`: Multiplier (non-negative floating point) of standard deviation. (Default: 1)
+- `safeVarianceSensitivity`: Root power (non-negative floating point) of standard deviation. (Default: 2)
+- `RiskThreshold`: The threshold for the node risk (between 0 and 1). Nodes with higher risk are filtered out. (Default: 0.75)
+
+In summary, the `CheckRiskNodebandwidth` plugin filters out nodes with a high risk of the bandwidth exceeding the node available capacity. 
+
+#### Example
+
+Let's consider that our cluster has three nodes `N1 - N3`, and the pod to be scheduled has a bandwidth requirement of 100 Mbps (Bandwidth). 
+All nodes have a link capacity of 1 Gbps.
+
+The mean (M) and standard deviation (V) are extracted from the load-watcher component. 
+Otherwise, we assume that M and V are the requested amount and zero, respectively.
+The `node_risk` is calculated for all candidate nodes. 
+
+As a result, both `N1`, `N2` will be considered for scoring, 
+while `N3` is filtered out due to its **high risk (0.787).**
+
+![filterExample](figs/filterExample.png)
 
 # Known limitations
 
