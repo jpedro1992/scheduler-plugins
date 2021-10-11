@@ -408,7 +408,7 @@ type TopologyList []AppGroupTopology
 In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
 It consists of 10 pods, which we named from P1 - P10. 
 
-<p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="1000" class="center"/></p>
+<p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="800" class="center"/></p>
 
 As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
 We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-algorithm).
@@ -418,7 +418,7 @@ The topology list corresponds to:
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
 ```
 
-<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="800" class="center"/></p>
+<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="700" class="center"/></p>
 
 ## Network Topology CRD (NetworkTopology)
 
@@ -934,7 +934,7 @@ And at a given moment, the status part of the NetworkTopology CRD is the followi
 
 Based on the NetworkTopology CRD, the controller has cached the following network graph:
  
- <p align="center"><img src="figs/graph.png" title="graph" width="1000" class="center"/></p>
+ <p align="center"><img src="figs/graph.png" title="graph" width="800" class="center"/></p>
 
 ##### Score nodes for a given pod based on the AppGroup CRD and NetworkTopology CRD
 
