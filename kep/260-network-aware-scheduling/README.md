@@ -46,9 +46,11 @@ The proposal also presents a bandwidth resource component (DaemonSet) to adverti
 as **extended resources** to allow already available filter/scoring plugins (e.g., `PodFitsResources`, 
 `BalancedAlocation`) to consider bandwidth allocation.
 
-To tackle latency in the scheduling process, several plugins are proposed in this document, 
-including: `TopologicalSort` (**QueueSort**), `NetworkMinCost` (**Score**) and
- `CheckRiskNodebandwidth` (**Filter**). 
+To tackle latency and bandwidth in the scheduling process, several plugins are proposed in this document, 
+including: 
+- `TopologicalSort` (**QueueSort**).
+- `NetworkMinCost` (**Score**).
+- `CheckRiskNodebandwidth` (**Filter**). 
 
 # Motivation
 
@@ -171,7 +173,7 @@ Further explanations are given below on how the proposed plugins interact with b
 
 ## Application Group CRD (AppGroup)
 
-We designed an AppGroup CRD for service chains based on the Pod Group concept introduced for the Co-scheduling plugin. 
+We designed an AppGroup CRD for service chains based on the [Pod Group](https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/kep/42-podgroup-coscheduling/README.md) concept introduced for the Co-scheduling plugin. 
 The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different pods based on service topology information. 
 The AppGroup CRD also records pod allocations (i.e., node/pod pairs) under the status part.
 
@@ -365,7 +367,7 @@ type AppGroupStatus struct {
 
 	// PodsScheduled defines pod allocations (pod name, pod id, hostname).
 	// +optional
-	PodsScheduled ScheduledList `json:"scheduled,omitempty"`
+	PodsScheduled ScheduledList `json:"podsScheduled,omitempty"`
 
 	// ScheduleStartTime of the group
 	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty"`
@@ -406,7 +408,7 @@ type TopologyList []AppGroupTopology
 In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
 It consists of 10 pods, which we named from P1 - P10. 
 
-<p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="600" class="center"/></p>
+<p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="1000" class="center"/></p>
 
 As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
 We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-algorithm).
@@ -416,7 +418,7 @@ The topology list corresponds to:
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
 ```
 
-<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="618" class="center"/></p>
+<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="800" class="center"/></p>
 
 ## Network Topology CRD (NetworkTopology)
 
@@ -650,7 +652,8 @@ type NetworkTopologyCostInfo struct {
 ### Bandwidth Requests via extended resources
 
 We plan to advertise the node's (physical) bandwidth capacity of the cluster via [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/). 
-A bandwidth resource component will be developed to send HTTP requests to the Kubernetes API server regarding the node's bandwidth capacity:
+A bandwidth resource component will be developed to send HTTP requests to the Kubernetes API server regarding the node's bandwidth capacity. 
+Also, a PATCH request can be sent manually as the following example:  
 
 ```HTTP
 PATCH /api/v1/nodes/<your-node-name>/status HTTP/1.1
@@ -738,26 +741,16 @@ Netperf tests will be executed based on the nodes available in the infrastructur
 This allows measuring the latency between nodes / zones. 
 As an initial design, we are focused on the **90th percentile latency**.
 
-<p align="center"><img src="figs/netperf.png" title="netperf" width="600" class="center"/></p>
+<p align="center"><img src="figs/netperf.png" title="netperf" width="1016" class="center"/></p>
 
 We plan to create histograms in [Prometheus](https://prometheus.io/) with the measured values.
 
-To address scalability concerns, network weights are calculated by the controller (NetworkTopology) for the nodes available in the infrastructure. 
+To address scalability concerns, the load-watcher component will retrieve the measurements and network weights will be calculated by the NetworkTopology controller. 
 
-The controller updates the cached network graph with network weights for all nodes based on the netperf measurements available in Prometheus. 
+The network graph is recalculated depending on the specified `FreqUpdate` (e.g., every 1 minute, every 5 minutes). 
 
-The network graph is recalculated based on new measurements depending on the specified `FreqUpdate` (e.g., every 1 min, every 5 minutes, every 10 minutes). 
-
-As a default algorithm, the [Dijkstra Shortest Path](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/) is supported.
-
+As a default algorithm, the [Dijkstra Shortest Path](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/) is supported. 
 Typically, the time complexity of the Dijkstra algorithm is: `O (V + E log V)`, where V corresponds to Vertices and E to Edges in the infrastructure.  
-
-We acknowledge the overhead introduced by our controller and corresponding `NetworkMinCost` plugin. 
-However, to make better decisions concerning latency, we need accurate and up-to-date information regarding cluster latency. 
-
-Experiments are planned to evaluate the overhead of our design in different topologies.
-We also aim to study the frequency of the netperf measurements and the trade-off between monitoring frequencies and accuracy.
- 
 At a later stage, other algorithms for weight calculation can be added and supported (e.g., [Bellman Ford](https://www.geeksforgeeks.org/bellman-ford-algorithm-dp-23/)).
 
 The component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!)
@@ -834,7 +827,7 @@ We propose a scoring plugin called `NetworkMinCost` to favor nodes with the lowe
 
 Pod allocations (pod name, pod id, pod hostname) are available in the AppGroup CRD updated by the controller. 
 
-Network weights are available in the NetworkTopology CRD updated by the controller based on netperf measurements available through Prometheus. 
+Network weights are available in the NetworkTopology CRD updated by the controller based on the netperf measurements. 
  
 If not a single pod belonging to the same AppGroup has been already allocated, 
 we score all candidate nodes equally: 
@@ -941,7 +934,7 @@ And at a given moment, the status part of the NetworkTopology CRD is the followi
 
 Based on the NetworkTopology CRD, the controller has cached the following network graph:
  
-![graph](figs/graph.png)
+ <p align="center"><img src="figs/graph.png" title="graph" width="1000" class="center"/></p>
 
 ##### Score nodes for a given pod based on the AppGroup CRD and NetworkTopology CRD
 
@@ -1060,7 +1053,7 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 }
 ```
 
-<p align="center"><img src="figs/scoreExample.png" title="scoreExample" width="600" class="center"/></p>
+<p align="center"><img src="figs/scoreExample.png" title="scoreExample" width="855" class="center"/></p>
 
 ### Description of the `CheckRiskNodebandwidth` Algorithm (Beta)
 
@@ -1142,7 +1135,7 @@ The `node_risk` is calculated for all candidate nodes.
 As a result, both `N1`, `N2` will be considered for scoring, 
 while `N3` is filtered out due to its **high risk (0.787).**
 
-<p align="center"><img src="figs/filterExample.png" title="filterExample" width="600" class="center"/></p>
+<p align="center"><img src="figs/filterExample.png" title="filterExample" width="773" class="center"/></p>
 
 # Known limitations
 
@@ -1197,10 +1190,14 @@ Unit tests and Integration tests will be added:
 
 *   Will enabling / using this feature result in increasing time taken by any operations covered by [existing SLIs/SLOs](https://git.k8s.io/community/sig-scalability/slos/slos.md#kubernetes-slisslos)? 
 
-    It should be a negligible increase concerning execution time since our scoring plugin extracts topology information from the NetworkTopology CRD 
-    and application information from the AppGroup CRD. 
-    All network weights are pre-calculated by the controller and updated in the status part of the CRDs to minimize the overhead of the scoring plugin. 
-    We will perform several experiments to evaluate the impact of our design.
+    We acknowledge the overhead introduced by our NetworkTopology controller and corresponding `NetworkMinCost` plugin. 
+    However, to make better decisions concerning latency, we need accurate and up-to-date information regarding cluster latency. 
+    
+    Experiments are planned to evaluate the overhead of our design in different topologies. 
+    We also aim to study the frequency of the netperf measurements and the trade-off between monitoring frequencies and accuracy.
+
+    Nevertheless, it should be a negligible increase concerning execution time since our scoring plugin extracts topology information 
+    from the NetworkTopology CRD and application information from the AppGroup CRD.   
 
 *   Will enabling / using this feature result in non-negligible increase of resource usage (CPU, RAM, disk, IO, ...) in any components? 
 
