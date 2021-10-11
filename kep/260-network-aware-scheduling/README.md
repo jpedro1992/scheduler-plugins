@@ -555,7 +555,9 @@ metadata:
   name: net-topology-test
   namespace: test-namespace
 spec:
-  prometheusAddress: http://prometheus-k8s.monitoring.svc.cluster.local:9090
+  metricProvider:
+    type: Prometheus
+    address: http://prometheus-k8s.monitoring.svc.cluster.local:9090
   topologyAlgorithm: Dijkstra
   freqUpdate: 5
   timeRangeInMinutes: 30 
@@ -566,25 +568,25 @@ A NetworkTopology controller updates the CRD regarding network weights calculate
 ```go
 // NetworkTopologyController is a controller that process Network Topology using provided Handler interface
 type NetworkTopologyController struct {
-	eventRecorder    record.EventRecorder
-	ntQueue          workqueue.RateLimitingInterface
-	ntLister         schedlister.NetworkTopologyLister
-	nodeLister       corelister.NodeLister
-	ntListerSynced   cache.InformerSynced
-	nodeListerSynced cache.InformerSynced
-	ntClient         schedclientset.Interface
-	prometheus       *util.PrometheusHandle                 // Prometheus query handler
-	lock             sync.RWMutex                           // lock for network graph and cost calculation
-	nodeCount        int64                                  // Number of nodes in the cluster.
-	graph            *util.Graph                            // Network Graph for cost calculation
+	eventRecorder        record.EventRecorder
+	ntQueue              workqueue.RateLimitingInterface
+	ntLister             schedlister.NetworkTopologyLister
+	nodeLister           corelister.NodeLister
+	ntListerSynced       cache.InformerSynced
+	nodeListerSynced     cache.InformerSynced
+	ntClient             schedclientset.Interface
+	loadWatcherCollector *util.NetworkTopologyCollector // Collector to get data from load watcher. Inspired by the Trimaran plugin.
+	lock                 sync.RWMutex                   // lock for network graph and cost calculation.
+	nodeCount            int64                          // Number of nodes in the cluster.
+	graph                *util.Graph                    // Network Graph for cost calculation.
 }
 ```
 
 ```go
 // NetworkTopologySpec represents the template of a NetworkTopology.
 type NetworkTopologySpec struct {
-	// The Prometheus address
-	PrometheusAddress string `json:"prometheusAddress,omitempty"`
+	// Metric Provider to use when using load watcher as a library
+	MetricProvider configTypes.MetricProviderSpec `json:"metricProvider,omitempty"`
 
 	// The algorithm for weight calculation
 	TopologyAlgorithm string `json:"topologyAlgorithm,omitempty"`
@@ -881,7 +883,9 @@ metadata:
   name: net-topology-test
   namespace: test-namespace
 spec:
-  prometheusAddress: http://prometheus-k8s.monitoring.svc.cluster.local:9090
+  metricProvider:
+    type: Prometheus
+    address: http://prometheus-k8s.monitoring.svc.cluster.local:9090
   topologyAlgorithm: Dijkstra
   freqUpdate: 5
   timeRangeInMinutes: 30 
