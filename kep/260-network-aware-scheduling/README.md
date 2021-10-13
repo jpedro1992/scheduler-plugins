@@ -163,7 +163,7 @@ As an initial design, we plan to implement three plugins:
     -  Pods are sorted based on their established dependencies.
 - A **Score** function called `NetworkMinCost`:
     - Nodes are scored based on network weights ensuring network latency is minimized for pods belonging to the same application.
-- A **Filter** function called `CheckRiskNodebandwidth`. 
+- A **Filter** function called `CheckRiskNodebandwidth`: 
     - Nodes are filtered out based on their current network bandwidth.
 
 A [Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) has been designed to establish an Application Group (AppGroup CRD). 
@@ -301,8 +301,8 @@ spec:
                       default: 1
                       minimum: 1
                       format: int64
-                      description: Priority index for each Pod (e.g., 1, 2, ...), 
-                                    where an index of 1 means pod should be scheduled first in the 
+                      description: Priority index for each Pod (e.g., 1, 2, ...), where 
+                                    an index of 1 means pod should be scheduled first in the AppGroup
             type: object
         type: object
     served: true
@@ -421,7 +421,7 @@ The topology list corresponds to:
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
 ```
 
-<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="800" class="center"/></p>
+<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="750" class="center"/></p>
 
 ## Network Topology CRD (NetworkTopology)
 
