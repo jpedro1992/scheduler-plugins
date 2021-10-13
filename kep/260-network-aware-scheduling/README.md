@@ -63,7 +63,7 @@ and not only resource usages (e.g., CPU and RAM).
 Several organizations face latency when using cloud services. 
 Distance from servers is usually the primary culprit. 
 The best strategy is to reduce the latency between services belonging to the same application. 
-This work is inspired by [Service Function Chaining](https://www.sciencedirect.com/science/article/pii/S1084804516301989).
+This work is inspired by [Service Function Chaining](https://www.sciencedirect.com/science/article/pii/S1084804516301989) (SFC).
 Also, bandwidth plays an important role since overloaded nodes would degrade performance. 
 
 We propose a **Network-Aware framework** for Kubernetes focused on delivering low latency to end-users 
@@ -75,23 +75,24 @@ This work significantly extends the previous work open-sourced [here](https://gi
 
 - Provide a network-aware framework to extend scheduling features of Kubernetes by considering latency and bandwidth.
 - Consider different pods as an Application:    
-    - The creation of an **Application Group (AppGroup) CRD**
+    - The creation of an **Application Group (AppGroup) CRD**.
 - Define network weights for each node / zone in the cluster:
-    - The creation of a **Network Topology (NetworkTopology) CRD**: 
+    - The creation of a **Network Topology (NetworkTopology) CRD**.
 - The advertising of the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/): 
     - Bandwidth requests and limitations allow filtering overloaded nodes (bandwidth) considered for scheduling.
-    - Consider bandwidth requests for scoring plugins (e.g., `MostRequested`, `BalancedAllocation`) 
-- Establish a specific order to allocate Pods based on their AppGroup CRD.
-    - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering.)
+    - Consider bandwidth requests for scoring plugins (e.g., `MostRequested`, `BalancedAllocation`). 
+- Establish a specific order to allocate Pods based on their AppGroup CRD:
+    - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering).
 - Near-optimal scheduling decisions based on latency:
     - Implementation of a **Score** plugin based on the [Dijkstra Shortest Path calculation](https://www.geeksforgeeks.org/dijkstras-shortest-path-algorithm-greedy-algo-7/).
-- Evaluate the risk of allocating pods on nodes based on their current demand (network bandwidth).
+- Evaluate the risk of allocating pods on nodes based on their current demand (network bandwidth):
     - Implementation of a **Filter** plugin based on the [Trimaran load-aware scheduler](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/trimaran).    
 
 ## Non-Goals
 
 - Descheduling due to unexpected outcomes is not addressed in the initial design.
-- We plan to combine our plugin with other scoring functions: `RequestedToCapacityRatio` and `BalancedAllocation`. A higher weight must be given to our plugin ensuring low latency is preferred. 
+- We plan to combine our plugin with other scoring functions (e.g., `RequestedToCapacityRatio`, `BalancedAllocation`). 
+A higher weight must be given to our plugin ensuring low latency is preferred. 
 Further evaluations will follow to measure the impact / interoperability with other plugins but are out of the scope of the initial design.   
 
 ## Use cases / Topologies 
@@ -109,14 +110,14 @@ Network latency can be different among the nodes in the infrastructure, impactin
 Latency is a critical requirement for several applications (e.g., [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
 Also, bandwidth plays an important role since pods can be allocated on overloaded nodes (i.e., high incoming traffic), causing performance degradation.
 
-This work focuses on microservice dependencies inspired by Service Function Chaining. 
+This work focuses on microservice dependencies inspired by SFC. 
 For example, in the Redis cluster application, there are several dependencies among the masters and the slaves:
 
 <p align="center"><img src="figs/redis.png" title="Redis app" width="600" class="center"/></p>
 
 ### 2 - Cloud2Edge application running on a multi-region geo-distributed cluster.
 
-Multi-region or Geo-distributed scenarios benefit the most from our framework and network-aware plugins. 
+Multi-region Geo-distributed scenarios benefit the most from our framework and network-aware plugins. 
 
 <p align="center"><img src="figs/multi_region.png" title="MultiRegion Topology" width="600" class="center"/></p>
 
@@ -131,14 +132,16 @@ This section describes the third-party components needed for our framework.
 
 ## Bandwidth
 
-Bandwidth resources will be advertised as extended resources based on a bandwidth resource component open-sourced [here](ADD LINK TO REPO!). 
+Bandwidth resources will be advertised as extended resources based on a bandwidth resource component open-sourced [here](https://github.com/jpedro1992/network-aware-bandwidth-advertisement). 
 Bandwidth limitations will be enforced through the bandwidth CNI plugin. By installing [Calico](https://docs.projectcalico.org/reference/cni-plugin/configuration) as the networking 
 plugin, the bandwidth CNI plugin is already installed as default.
 
 ## Netperf 
 
-A netperf component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!). 
-The NetworkTopology controller and the `NetworkMinCost` plugin need accurate latency measurements to find nodes that reduce latency for AppGroups. 
+A netperf component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) 
+and open-sourced [here](https://github.com/jpedro1992/network-aware-k8s-netperf). 
+The NetworkTopology controller and the `NetworkMinCost` plugin need accurate latency measurements 
+to find nodes that reduce latency for a particular AppGroup. 
 
 ## Prometheus
 
@@ -148,7 +151,7 @@ For example, in our experiments, we will install [Kube-prometheus](https://githu
 ## Load-watcher
 
 The NetworkTopology controller uses a [load-watcher](https://github.com/paypal/load-watcher) component as a library for the 
-latency measurements. Also, the `CheckRiskNodebandwidth` plugin uses a [load-watcher](https://github.com/paypal/load-watcher) component 
+latency measurements. Also, the `CheckRiskNodebandwidth` plugin uses a load-watcher component 
 similar to the Trimaran plugin. Thus, load-watcher can be used as a service or as a library. 
 
 # Proposal - Design & Implementation details
@@ -226,7 +229,7 @@ spec:
                   description: Number of Pods belonging to the App Group
                 topologySortingAlgorithm:
                   type: string
-                  description: The algorithm for TopologyOrder(Status)
+                  description: The algorithm for TopologyOrder (Status)
                 Pods:
                   type: array
                   description: The Pods belonging to the group
@@ -257,7 +260,7 @@ spec:
                                 - type
                             type: object
           status:
-            description: Record Pod Allocations (Pod id, hostnames).
+            description: Record Pod Allocations (Pod name, Pod id, hostnames).
             properties:
               runningPods:
                 description: The number of actively running pods.
@@ -298,8 +301,8 @@ spec:
                       default: 1
                       minimum: 1
                       format: int64
-                      description: Priority index for each Pod (e.g., 1, 2, ...)
-                        (1 means pod should be scheduled first in the AppGroup)
+                      description: Priority index for each Pod (e.g., 1, 2, ...), 
+                                    where an index of 1 means pod should be scheduled first in the 
             type: object
         type: object
     served: true
@@ -341,6 +344,7 @@ spec:
 ```
 
 An AppGroup controller updates the AppGroup CRD regarding the pods already scheduled in the cluster and the preferred topology order for pod allocations. 
+
 Currently, four algorithms are supported for topological sorting: KahnSort, TarjanSort, ReverseKahn, ReverseTarjan. 
 The implementation is based on the work open-sourced [here](https://github.com/otaviokr/topological-sort).
 An index is given to each pod based on the sorting algorithm. If the index is equal to 1 means the pod should be allocated first in the AppGroup.
@@ -362,11 +366,9 @@ type AppGroupController struct {
 // AppGroupStatus represents the current state of a app group.
 type AppGroupStatus struct {
 	// The number of actively running pods.
-	// +optional
 	RunningPods int32 `json:"runningPods,omitempty"`
 
 	// PodsScheduled defines pod allocations (pod name, pod id, hostname).
-	// +optional
 	PodsScheduled ScheduledList `json:"podsScheduled,omitempty"`
 
 	// ScheduleStartTime of the group
@@ -411,14 +413,15 @@ It consists of 10 pods, which we named from P1 - P10.
 <p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="800" class="center"/></p>
 
 As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
-We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-algorithm).
+
+We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-algorithm-alpha).
 The topology list corresponds to:
 
 ```go
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
 ```
 
-<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="700" class="center"/></p>
+<p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="800" class="center"/></p>
 
 ## Network Topology CRD (NetworkTopology)
 
@@ -516,23 +519,23 @@ spec:
                   items:
                     algorithmName:
                       type: string
-                      description: Algorithm Name
+                      description: Algorithm Name (e.g., Dijkstra)
                     costList:
                       description: Record weights for several nodes based on the algorithm
                         type: object
                         properties:
                           origin:
                             type: string
-                            description: Node (Origin)
+                            description: Node name (Origin)
                           originZone:
                             type: string
-                              description: Node Zone (Origin)
+                              description: Node Zone name (Origin)
                           destination:
                             type: string
-                            description: Node / zone name (Destination)
+                            description: Node name (Destination)
                           destinationZone:
                             type: string
-                              description: Node Zone (Destination)
+                              description: Node Zone name (Destination)
                           cost:
                             type: integer
                             default: 0
@@ -728,13 +731,13 @@ This example shows how extended resources can be combined with bandwidth limitat
 apiVersion: v1
 kind: Pod
 metadata:
-  name: network-aware-plugin-example
+  name: network-aware-bandwidth-example
   annotations:
       kubernetes.io/ingress-bandwidth: 10M
       kubernetes.io/egress-bandwidth: 10M
 spec:
   containers:
-  - name: network-aware-plugin-example
+  - name: network-aware-bandwidth-example
     image: example
     resources:
       requests:
@@ -750,13 +753,23 @@ This allows to perform filter / score algorithms based on bandwidth resources (e
 Latency will be monitored through a [netperf](https://github.com/HewlettPackard/netperf) component. 
 Netperf tests will be executed based on the nodes available in the infrastructure. 
 This allows measuring the latency between nodes / zones. 
-As an initial design, we are focused on the **90th percentile latency**.
+As an initial design, we are focused on the **50th, 90th and 99th percentile latency**.
 
 <p align="center"><img src="figs/netperf.png" title="netperf" width="1016" class="center"/></p>
 
-We plan to create histograms in [Prometheus](https://prometheus.io/) with the measured values.
+We plan to create metrics in [Prometheus](https://prometheus.io/) with the measured values with **origin** and **destination** as labels. 
+For example:
 
-To address scalability concerns, the load-watcher component will retrieve the measurements and network weights will be calculated by the NetworkTopology controller. 
+```go
+INFO:root:Metric netperf_p50_latency_microseconds{origin="worker-4", destination="worker-2"} has the value 302
+INFO:root:Metric netperf_p90_latency_microseconds{origin="worker-4", destination="worker-2"} has the value 373
+INFO:root:Metric netperf_p99_latency_microseconds{origin="worker-4", destination="worker-2"} has the value 413
+INFO:root:Metric netperf_p50_latency_microseconds{origin="worker-3", destination="worker-1"} has the value 270
+INFO:root:Metric netperf_p90_latency_microseconds{origin="worker-3", destination="worker-1"} has the value 349
+INFO:root:Metric netperf_p99_latency_microseconds{origin="worker-3", destination="worker-1"} has the value 411
+ ``` 
+
+To address scalability concerns, the load-watcher component will retrieve the latency metrics and network weights will be calculated by the NetworkTopology controller. 
 
 The network graph is recalculated depending on the specified `FreqUpdate` (e.g., every 1 minute, every 5 minutes). 
 
@@ -764,7 +777,7 @@ As a default algorithm, the [Dijkstra Shortest Path](https://www.geeksforgeeks.o
 Typically, the time complexity of the Dijkstra algorithm is: `O (V + E log V)`, where V corresponds to Vertices and E to Edges in the infrastructure.  
 At a later stage, other algorithms for weight calculation can be added and supported (e.g., [Bellman Ford](https://www.geeksforgeeks.org/bellman-ford-algorithm-dp-23/)).
 
-The component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](ADD LINK TO REPO!)
+The netperf component will be developed based on [k8s-netperf](https://github.com/leannetworking/k8s-netperf) and open-sourced [here](https://github.com/jpedro1992/network-aware-k8s-netperf)
 
 ## Plugins
 
@@ -826,6 +839,7 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 
 Let's consider the Online Boutique application shown previously. 
 The AppGroup consists of 10 pods and the topology order based on the KahnSort algorithm is **P1, P10, P9, P8, P7, P6, P5, P4, P3, P2.**
+
 The plugin favors low indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
 
 <p align="center"><img src="figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
@@ -1216,7 +1230,8 @@ Unit tests and Integration tests will be added:
 
     No - Metrics / Information are available in both CRDs and only pulled by our plugins when needed. 
     It should be a negligible increase in terms of resource usage. Experiments are planned to evaluate the overhead of the 
-    Netperf component and both controllers (AppGroup CRD and NetworkTopology CRD).  
+    netperf component and both controllers (AppGroup CRD and NetworkTopology CRD).  
+    
     In addition, the algorithms provided run in linear and logarithmic time for the number of nodes.
 
 
@@ -1239,8 +1254,8 @@ Unit tests and Integration tests will be added:
 - Alpha 
     - [ ]  The implementation of the AppGroup controller (AppGroup CRD).
     - [ ]  The implementation of the NetworkTopology controller (NetworkTopology CRD).
-    - [ ]  The development of the Netperf component. 
-    - [ ]  The development of the Bandwidth resource component.
+    - [ ]  The development of the netperf component. 
+    - [ ]  The development of the bandwidth resource component.
     - [ ]  The implementation of the `TopologicalSort` plugin.
     - [ ]  The implementation of the `NetworkMinCost` plugin.
     - [ ]  Unit tests and integration tests from Test plans.
