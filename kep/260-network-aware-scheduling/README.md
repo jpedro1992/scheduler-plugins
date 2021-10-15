@@ -1032,19 +1032,39 @@ for _, p := range appGroup.Spec.Pods {
 	}
 }
 
+// Create map for cost / destinations. Search for costs faster...
+// Time complexity is O("Number of CostInfo in CostList")
+// break: Stop after seeing all costs related to the node since 
+// costs are sorted by origin
+var costMap = make(map[networkAwareUtil.CostKey]int64)
+seen := false
+for _, w := range networkTopology.Status.Weights { // Check the weights List
+	if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
+		for _, c := range w.CostList { // For each costInfo in CostList
+			if c.Origin == nodeName { // Save costs only for the given Node
+				seen = true
+				costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+					Origin:      c.Origin,
+					Destination: c.Destination}] = c.Cost
+			} else if seen == true { // Costs are sorted by origin, thus stop here
+				break
+			}
+		}
+	}
+}
+
+
 var cost int64 = 0
-// calculate accumulated shortest path, network weighs available in the NetworkTopology CRD
-for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated 
-	for _, dependencyName := range dependencyList { // For each pod dependency
-		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
-			for _, w := range networkTopology.Status.Weights { // Check the weights List
-				if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
-					for _, c := range w.CostList { // For each costInfo in CostList 
-					    if c.Origin == nodeName && c.Destination == podAllocated.Hostname { // Find the Cost for the hostname allocating the pod
-					        cost += c.Cost // Add the cost to the sum
-					    }
-				    }
-				}
+// calculate accumulated shortest path
+for _, podAllocated := range appGroup.Status.PodsScheduled {    // For each pod already allocated
+	for _, dependencyName := range dependencyList {             // For each pod dependency
+		if podAllocated.Name == dependencyName {                // If the pod allocated is an established dependency
+			value, ok := costMap[networkAwareUtil.CostKey{      // Retrieve the cost from the map (origin: nodeName, destination: pod hostname)
+				Origin:      nodeName,                          // Time Complexity: O(1)
+				Destination: podAllocated.Hostname,
+			}]
+			if ok {
+				cost += value                                   // Add the cost to the sum
 			}
 		}
 	}
