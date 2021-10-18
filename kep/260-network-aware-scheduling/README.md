@@ -1053,7 +1053,6 @@ for _, w := range networkTopology.Status.Weights { // Check the weights List
 	}
 }
 
-
 var cost int64 = 0
 // calculate accumulated shortest path
 for _, podAllocated := range appGroup.Status.PodsScheduled {    // For each pod already allocated
