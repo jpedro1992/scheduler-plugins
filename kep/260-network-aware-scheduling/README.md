@@ -807,22 +807,17 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 		klog.Infof("Pods: %v and %v from the same appGroup %v", pInfo1.Pod.Name, pInfo2.Pod.Name, p1AppGroup)
 		agName := p1AppGroup
 		appGroup, err := findAppGroupTopologicalSort(agName, ts)
+
 		if err != nil {
 			klog.ErrorS(err, "Error while returning AppGroup")
 			s := &qos.Sort{}
 			return s.Less(pInfo1, pInfo2)
 		}
-		var orderP1 = math.MaxInt64
-		var orderP2 = math.MaxInt64
 
-		for _, p := range appGroup.Status.TopologyOrder {
-			if p.PodName == pInfo1.Pod.Name { //get order of P1
-				orderP1 = int(p.Index)
-			}
-			if p.PodName == pInfo2.Pod.Name { //get order of P2
-				orderP2 = int(p.Index)
-			}
-		}
+		// Binary search to find both order index since topology list is ordered by Pod Name
+		var orderP1 = networkAwareUtil.FindPodOrder(appGroup.Status.TopologyOrder, pInfo1.Pod.Name)
+		var orderP2 = networkAwareUtil.FindPodOrder(appGroup.Status.TopologyOrder, pInfo2.Pod.Name)
+
 		klog.Infof("Pod %v order: %v and Pod %v order: %v.", pInfo1.Pod.Name, orderP1, pInfo2.Pod.Name, orderP2)
 
 		// Lower is better, thus invert result!
