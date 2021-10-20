@@ -923,39 +923,44 @@ And at a given moment, the status part of the NetworkTopology CRD is the followi
               nodeCount: 5
               weightCalculationTime: 2021-10-06 10:00:00
               weights:
-                algorithmName: Dijkstra
-                - costList:
-                  items:
-                    - origin: worker-1
-                      originZone: Z1
-                      destination: worker-2
-                      destinationZone: Z1
-                      cost: 1
-                    - origin: worker-1
-                      originZone: Z1
-                      destination: worker-3
-                      destinationZone: Z2
-                      cost: 4
-                    - origin: worker-2
-                      originZone: Z1
-                      destination: worker-4
-                      destinationZone: Z3
-                      cost: 6
-                    - origin: worker-3
-                      originZone: Z2
-                      destination: worker-4
-                      destinationZone: Z3
-                      cost: 5
-                    - origin: worker-3
-                      originZone: Z2
-                      destination: worker-5
-                      destinationZone: Z3
-                      cost: 3
-                    - origin: worker-4
-                      originZone: Z3
-                      destination: worker-5
-                      destinationZone: Z3
-                      cost: 2
+                - algorithmName: Dijkstra
+                  origin: worker-1
+                  originZone: Z1
+                  - costList:
+                    items:
+                      - destination: worker-2
+                        destinationZone: Z1
+                        cost: 1
+                      - destination: worker-3
+                        destinationZone: Z2
+                        cost: 4
+                - algorithmName: Dijkstra
+                  origin: worker-2
+                  originZone: Z1
+                  - costList:
+                    items:
+                      - destination: worker-4
+                        destinationZone: Z3
+                        cost: 6
+                - algorithmName: Dijkstra
+                  origin: worker-3
+                  originZone: Z2
+                  - costList:
+                    items:
+                      - destination: worker-4
+                        destinationZone: Z3
+                        cost: 5
+                      - destination: worker-5
+                        destinationZone: Z3
+                        cost: 3
+                - algorithmName: Dijkstra
+                  origin: worker-4
+                  originZone: Z3
+                  - costList:
+                    items:
+                      - destination: worker-5
+                        destinationZone: Z3
+                        cost: 2
 ```
 
 Based on the NetworkTopology CRD, the controller has cached the following network graph:
@@ -1033,36 +1038,32 @@ for _, p := range appGroup.Spec.Pods {
 
 // Create map for cost / destinations. Search for costs faster...
 // Time complexity is O("Number of CostInfo in CostList")
-// break: Stop after seeing all costs related to the node since 
-// costs are sorted by origin
 var costMap = make(map[networkAwareUtil.CostKey]int64)
 seen := false
 for _, w := range networkTopology.Status.Weights { // Check the weights List
-	if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
-		for _, c := range w.CostList { // For each costInfo in CostList
-			if c.Origin == nodeName { // Save costs only for the given Node
-				seen = true
-				costMap[networkAwareUtil.CostKey{ // Add the cost to the map
-					Origin:      c.Origin,
-					Destination: c.Destination}] = c.Cost
-			} else if seen == true { // Costs are sorted by origin, thus stop here
-				break
-			}
+	if w.AlgorithmName == pl.algorithm && w.Origin == nodeName { // If its the preferred algorithm and the Origin (nodeName)
+		seen = true
+		for _, c := range w.CostList { // For each costInfo in CostList: Save costs for the given Node
+			costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+				Origin:      nodeName,
+				Destination: c.Destination}] = c.Cost
 		}
+	} else if seen == true { // Costs were saved already, thus stop here
+		break
 	}
 }
 
 var cost int64 = 0
 // calculate accumulated shortest path
-for _, podAllocated := range appGroup.Status.PodsScheduled {    // For each pod already allocated
-	for _, dependencyName := range dependencyList {             // For each pod dependency
-		if podAllocated.Name == dependencyName {                // If the pod allocated is an established dependency
-			value, ok := costMap[networkAwareUtil.CostKey{      // Retrieve the cost from the map (origin: nodeName, destination: pod hostname)
-				Origin:      nodeName,                          // Time Complexity: O(1)
+for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
+	for _, dependencyName := range dependencyList { // For each pod dependency
+		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
+			value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: nodeName, destination: pod hostname)
+				Origin:      nodeName, // Time Complexity: O(1)
 				Destination: podAllocated.Hostname,
 			}]
 			if ok {
-				cost += value                                   // Add the cost to the sum
+				cost += value // Add the cost to the sum
 			}
 		}
 	}
@@ -1084,14 +1085,17 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 	// Lower scores correspond to lower latency
 	// Get Min and Max Scores to normalize between framework.MaxNodeScore and framework.MinNodeScore
 	minCost, maxCost := GetMinMaxScores(scores)
-
-	for i, nodeScore := range scores {
-		if maxCost != minCost { // Avoid division by 0
+	var normCost float64
+	for i := range scores {
+		if maxCost != minCost { // If max != min
 			// node_normalized_cost = MAX_SCORE * ( ( nodeScore - minCost) / (maxCost - minCost)
 			// nodeScore = MAX_SCORE - node_normalized_cost
-			scores[i].Score = framework.MaxNodeScore - (framework.MaxNodeScore * (nodeScore.Score - minCost/(maxCost-minCost)))
-		} else { // If maxCost = minCost
-			scores[i].Score = framework.MaxNodeScore - (framework.MaxNodeScore * (nodeScore.Score - minCost))
+			normCost = float64(framework.MaxNodeScore) * float64(scores[i].Score-minCost) / float64(maxCost-minCost)
+			scores[i].Score = framework.MaxNodeScore - int64(normCost)
+
+		} else { // If maxCost = minCost, avoid division by 0
+			normCost = float64(scores[i].Score - minCost)
+			scores[i].Score = framework.MaxNodeScore - int64(normCost)
 		}
 	}
 	return nil
