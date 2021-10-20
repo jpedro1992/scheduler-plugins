@@ -1032,38 +1032,45 @@ for _, p := range appGroup.Spec.Pods {
 	}
 }
 
+klog.V(6).Info("dependencyList: ", dependencyList)
+
 // Create map for cost / destinations. Search for costs faster...
-// Time complexity is O("Number of CostInfo in CostList")
-// break: Stop after seeing all costs related to the node since 
-// costs are sorted by origin
 var costMap = make(map[networkAwareUtil.CostKey]int64)
+
 seen := false
 for _, w := range networkTopology.Status.Weights { // Check the weights List
 	if w.AlgorithmName == pl.algorithm { // If its the Preferred algorithm
-		for _, c := range w.CostList { // For each costInfo in CostList
-			if c.Origin == nodeName { // Save costs only for the given Node
-				seen = true
-				costMap[networkAwareUtil.CostKey{ // Add the cost to the map
-					Origin:      c.Origin,
-					Destination: c.Destination}] = c.Cost
-			} else if seen == true { // Costs are sorted by origin, thus stop here
-				break
-			}
+	    // Binary search through CostList: find the min and max id for the given Origin
+		min := networkAwareUtil.FindLowerBoundWeightList(w.CostList, nodeName, 0, len(w.CostList)-1)
+		max := networkAwareUtil.FindUpperBoundWeightList(w.CostList, nodeName, 0, len(w.CostList)-1)
+
+		klog.V(6).Info("min: ", min)
+		klog.V(6).Info("max: ", max)
+
+		for i := min; i < max; i++ {
+			seen = true
+			costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+				Origin:      w.CostList[i].Origin,
+				Destination: w.CostList[i].Destination}] = w.CostList[i].Cost
 		}
+	} else if seen == true { // Costs are sorted by origin, thus stop here
+		break
 	}
 }
 
+klog.V(6).Info("costMap: ", costMap)
+
 var cost int64 = 0
 // calculate accumulated shortest path
-for _, podAllocated := range appGroup.Status.PodsScheduled {    // For each pod already allocated
-	for _, dependencyName := range dependencyList {             // For each pod dependency
-		if podAllocated.Name == dependencyName {                // If the pod allocated is an established dependency
-			value, ok := costMap[networkAwareUtil.CostKey{      // Retrieve the cost from the map (origin: nodeName, destination: pod hostname)
-				Origin:      nodeName,                          // Time Complexity: O(1)
+for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
+	for _, dependencyName := range dependencyList { // For each pod dependency
+		if podAllocated.Name == dependencyName { // If the pod allocated is an established dependency
+			value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: nodeName, destination: pod hostname)
+				Origin:      nodeName, // Time Complexity: O(1)
 				Destination: podAllocated.Hostname,
 			}]
 			if ok {
-				cost += value                                   // Add the cost to the sum
+				cost += value // Add the cost to the sum
 			}
 		}
 	}
@@ -1073,7 +1080,7 @@ for _, podAllocated := range appGroup.Status.PodsScheduled {    // For each pod 
 score = cost
 
 klog.V(6).Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
-return score, framework.NewStatus(framework.Success,
+return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 ``` 
 
 Then, we get the maximum and minimum costs for all candidate nodes to normalize the values between 0 and 100. 
@@ -1291,4 +1298,4 @@ Unit tests and Integration tests will be added:
 
 - 2021-9-9: Presentation to the Kubernetes sig-scheduling community. 
 Received feedback and comments on the design and implementation. Recording available [here](https://youtu.be/D9jSqUiaq1Q). 
-- 2021-10-15: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
+- 2021-10-22: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
