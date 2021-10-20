@@ -520,22 +520,22 @@ spec:
                     algorithmName:
                       type: string
                       description: Algorithm Name (e.g., Dijkstra)
-                    origin:
-                      type: string
-                      description: Node name (Origin)
-                    originZone:
-                       type: string
-                       description: Node Zone name (Origin)
                     costList:
                       description: Record weights for several nodes based on the algorithm
                         type: object
                         properties:
+                          origin:
+                            type: string
+                            description: Node name (Origin)
+                          originZone:
+                            type: string
+                              description: Node Zone name (Origin)
                           destination:
                             type: string
                             description: Node name (Destination)
                           destinationZone:
                             type: string
-                            description: Node Zone name (Destination)
+                              description: Node Zone name (Destination)
                           cost:
                             type: integer
                             default: 0
@@ -630,33 +630,34 @@ type NetworkTopologyWeightList []NetworkTopologyWeightInfo
 // +protobuf=true
 type NetworkTopologyCostList []NetworkTopologyCostInfo
 
+
 // NetworkTopologyResourceInfo contains information about one resource type.
 // +protobuf=true
 type NetworkTopologyWeightInfo struct {
-	// Preferred Algorithm
+	// Preferred Algorithms
 	AlgorithmName string `json:"algorithmName" protobuf:"bytes,1,opt,name=algorithmName"`
 
-	// Name of the origin (e.g., Node Name).
-	Origin string `json:"origin" protobuf:"bytes,2,opt,name=origin"`
-
-	// Name of the origin zone (e.g., Node Zone).
-	OriginZone string `json:"originZone" protobuf:"bytes,3,opt,name=originZone"`
-
-	// Costs related to the Origin
-	CostList NetworkTopologyCostList `json:"costList" protobuf:"bytes,4,opt,name=costList"`
+	// Costs from a given Origin to a given Destination
+	CostList NetworkTopologyCostList `json:"costList" protobuf:"bytes,2,opt,name=costList"`
 }
 
-// NetworkTopologyCostInfo contains information about costs.
+// NetworkTopologyResourceInfo contains information about one resource type.
 // +protobuf=true
 type NetworkTopologyCostInfo struct {
+	// Name of the origin (e.g., Node Name).
+	Origin string `json:"origin" protobuf:"bytes,1,opt,name=origin"`
+
+	// Name of the Origin zone (e.g., Node Zone).
+	OriginZone string `json:"originZone" protobuf:"bytes,2,opt,name=originZone"`
+
 	// Name of the destination (e.g., Node Name).
-	Destination string `json:"destination" protobuf:"bytes,1,opt,name=destination"`
+	Destination string `json:"destination" protobuf:"bytes,3,opt,name=destination"`
 
 	// Name of the Destination zone (e.g., Node Zone).
-	DestinationZone string `json:"destinationZone" protobuf:"bytes,2,opt,name=destinationZone"`
+	DestinationZone string `json:"destinationZone" protobuf:"bytes,4,opt,name=destinationZone"`
 
 	// Network Cost
-	Cost int64 `json:"cost" protobuf:"bytes,3,opt,name=cost"`
+	Cost int64 `json:"cost" protobuf:"bytes,5,opt,name=cost"`
 }
 ```
 
