@@ -51,8 +51,7 @@ type LoadVariationRiskBalancing struct {
 
 // New : create an instance of a LoadVariationRiskBalancing plugin
 func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-
-	klog.V(4).Infof("Creating new instance of the LoadVariationRiskBalancing plugin")
+	klog.V(4).InfoS("Creating new instance of the LoadVariationRiskBalancing plugin")
 	collector, err := newCollector(obj)
 	if err != nil {
 		return nil, err
@@ -90,8 +89,7 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 
 // Score : evaluate score for a node
 func (pl *LoadVariationRiskBalancing) Score(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
-
-	klog.V(6).Infof("Calculating score for pod %q on node %q", pod.GetName(), nodeName)
+	klog.V(6).InfoS("Calculating score", "pod", klog.KObj(pod), "nodeName", nodeName)
 	score := framework.MinNodeScore
 	nodeInfo, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
 	if err != nil {
@@ -100,7 +98,7 @@ func (pl *LoadVariationRiskBalancing) Score(ctx context.Context, cycleState *fra
 	// get node metrics
 	metrics := pl.collector.getNodeMetrics(nodeName)
 	if metrics == nil {
-		klog.Warningf("failure getting metrics for node %q; using minimum score", nodeName)
+		klog.InfoS("Failed to get metrics for node; using minimum score", "nodeName", nodeName)
 		return score, nil
 	}
 	podRequest := getResourceRequested(pod)
@@ -111,14 +109,14 @@ func (pl *LoadVariationRiskBalancing) Score(ctx context.Context, cycleState *fra
 	if cpuOK {
 		cpuScore = cpuStats.computeScore(pl.collector.args.SafeVarianceMargin, pl.collector.args.SafeVarianceSensitivity)
 	}
-	klog.V(6).Infof("pod:%s; node:%s; CPUScore=%f", pod.GetName(), nodeName, cpuScore)
+	klog.V(6).InfoS("Calculating CPUScore", "pod", klog.KObj(pod), "nodeName", nodeName, "cpuScore", cpuScore)
 	// calculate Memory score
 	var memoryScore float64 = 0
 	memoryStats, memoryOK := createResourceStats(metrics, node, podRequest, v1.ResourceMemory, watcher.Memory)
 	if memoryOK {
 		memoryScore = memoryStats.computeScore(pl.collector.args.SafeVarianceMargin, pl.collector.args.SafeVarianceSensitivity)
 	}
-	klog.V(6).Infof("pod:%s; node:%s; MemoryScore=%f", pod.GetName(), nodeName, memoryScore)
+	klog.V(6).InfoS("Calculating MemoryScore", "pod", klog.KObj(pod), "nodeName", nodeName, "memoryScore", memoryScore)
 	// calculate total score
 	var totalScore float64 = 0
 	if memoryOK && cpuOK {
@@ -127,7 +125,7 @@ func (pl *LoadVariationRiskBalancing) Score(ctx context.Context, cycleState *fra
 		totalScore = math.Max(memoryScore, cpuScore)
 	}
 	score = int64(math.Round(totalScore))
-	klog.V(6).Infof("pod:%s; node:%s; TotalScore=%d", pod.GetName(), nodeName, score)
+	klog.V(6).InfoS("Calculating totalScore", "pod", klog.KObj(pod), "nodeName", nodeName, "totalScore", score)
 	return score, framework.NewStatus(framework.Success, "")
 }
 
