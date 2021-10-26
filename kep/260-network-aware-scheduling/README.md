@@ -773,7 +773,7 @@ The netperf component will be developed based on [k8s-netperf](https://github.co
 
 ## Plugins
 
-### Description of the `TopologicalSort` Algorithm (Alpha)
+### Description of the `TopologicalSort` Algorithm
 
 **Extension point: QueueSort**
 
@@ -831,7 +831,7 @@ The plugin favors low indexes. Thus, depending on the two pods evaluated in the 
 
 <p align="center"><img src="figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
 
-### Description of the `NetworkMinCost` Algorithm (Alpha)
+### Description of the `NetworkMinCost` Algorithm
 
 **Extension point: Score**
 
