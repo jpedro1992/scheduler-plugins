@@ -51,22 +51,30 @@ To tackle latency and bandwidth in the scheduling process, two plugins are propo
 
 # Motivation
 
-Recent applications are demanding lower latency.
-Scheduling pods only focused on reducing costs are not suitable for applications where low latency plays a major role. 
-Applications such as the Internet of Things (IoT) and video services 
-would benefit the most from plugins where latency and bandwidth are considered in the decision process 
-and not only resource usages (e.g., CPU and RAM). 
+Many applications are latency-sensitive, demanding lower latency between microservices in the application.
+Scheduling policies that aim to reduce costs or increase resource efficiency are not enough for applications
+where end-to-end latency becomes a primary objective.
+Applications such as the Internet of Things (IoT), multi-tier web services, and video streaming services
+would benefit the most from network-aware scheduling policies, which consider latency and bandwidth
+in addition to the default resources (e.g., CPU and memory) used by the scheduler.
 
-Companies are currently facing latency when using cloud services. 
-Distance from servers is usually the primary culprit. 
-The best strategy is to reduce the latency between services belonging to the same application. 
-This work is inspired by [Service Function Chaining](https://www.sciencedirect.com/science/article/pii/S1084804516301989) (SFC).
-Also, bandwidth plays an important role since overloaded nodes would degrade performance. 
+Users encounter latency issues frequently when using multi-tier applications.
+These applications usually include tens to hundreds of microservices with complex interdependencies/chains.
+Distance from servers with chained microservices deployed is usually the primary culprit.
+The best strategy is to reduce the latency between chained microservices in the same application,
+according to the prior work about [Service Function Chaining](https://www.sciencedirect.com/science/article/pii/S1084804516301989) (SFC).
 
-We propose a **Network-Aware framework** for Kubernetes focused on delivering low latency to end-users 
-and ensuring bandwidth conservation during pod allocations. 
+Besides, bandwidth plays an essential role for those applications with high volumes of data transfers among microservices.
+For example, multiple replicas in a database application may require frequent copies to ensure data consistency.
+[Spark jobs](https://spark.apache.org/) may have frequent data transfers among map and reduce nodes.
+Insufficient network capacity in nodes would lead to increasing delay or packet drops,
+which will degrade the quality of service for applications.
 
-This work significantly extends the previous work open-sourced [here](https://github.com/jpedro1992/sfc-controller) based on the old scheduler extender process.  
+We propose a **Network-Aware Scheduling framework** for Kubernetes that focus on delivering low latency to end-users
+and ensuring bandwidth reservations in pod scheduling.
+
+This work significantly extends the previous work open-sourced [here](https://github.com/jpedro1992/sfc-controller) 
+that implements a latency aware scheduler extender based on the [scheduler extender](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) design.
 
 ## Goals
 
@@ -85,28 +93,30 @@ This work significantly extends the previous work open-sourced [here](https://gi
 
 ## Non-Goals
 
-- Descheduling due to unexpected outcomes is not addressed in the initial design.
-- We plan to combine our plugin with other scoring functions (e.g., `RequestedToCapacityRatio`, `BalancedAllocation`). 
-A higher weight must be given to our plugin ensuring low latency is preferred. 
-Further evaluations will follow to measure the impact / interoperability with other plugins but are out of the scope of the initial design.   
+- Descheduling due to unexpected outcomes is not addressed in this proposal.
+- The conflict between plugins in this proposal and other plugins are not studied in this proposal. Users are welcome to try plugins
+  in this proposal with other plugins (e.g., `RequestedToCapacityRatio`, `BalancedAllocation`). However, a higher weight must be given to
+  our plugin ensuring low latency is preferred.
 
 ## Use cases / Topologies 
 
 ### 1 - Spark/Database applications running in Data centers or small scale cluster topologies
 
-Efficient pod allocations depend on the infrastructure topology and correspondent resources. 
-Data centers and even small cluster topologies benefit from our network-aware framework. 
+Network-aware scheduling examines the infrastructure topology, 
+so latencies and bandwidth between nodes are considered while making scheduling decisions.
+Data centers with fat-tree topology or cluster topology can benefit from our network-aware framework, 
+as network conditions between nodes vary according to their positions in the topologies.
 
 <p align="center"><img src="figs/cluster.png" title="Cluster Topology" width="600" class="center"/></p>
 
 <p align="center"><img src="figs/data_center.png" title="DC Topology" width="600" class="center"/></p>
 
-Network latency can be different among the nodes in the infrastructure, impacting the application's response time. 
-Latency is a critical requirement for several applications (e.g., [Apache Spark](https://spark.apache.org/), [Redis cluster](https://redis.io/topics/cluster-tutorial)). 
-Also, bandwidth plays an important role since pods can be allocated on overloaded nodes (i.e., high incoming traffic), causing performance degradation.
-
-This work focuses on microservice dependencies inspired by SFC. 
-For example, in the Redis cluster application, there are several dependencies among the masters and the slaves:
+Network latency and available bandwidths between nodes can vary according to their locations in the infrastructure.
+Deploying microservices on different sets of nodes will impact the application's response time. 
+For specific applications, latency and bandwidth requirements can be critical.  
+For example, in a [Redis cluster](https://redis.io/topics/cluster-tutorial)), 
+master nodes need to synchronize data with slave nodes frequently. Namely, there are dependencies between the masters and the slaves.
+High latencies or low bandwidths between masters and slaves can lead to slow CRUD operations.
 
 <p align="center"><img src="figs/redis.png" title="Redis app" width="600" class="center"/></p>
 
