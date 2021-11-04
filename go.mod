@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/k8stopologyawareschedwg/noderesourcetopology-api v0.0.10
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/paypal/load-watcher v0.1.1
+	github.com/paypal/load-watcher v0.2.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.6.1
 	gonum.org/v1/gonum v0.6.2
@@ -19,11 +19,13 @@ require (
 	k8s.io/code-generator v0.21.4
 	k8s.io/component-base v0.21.4
 	k8s.io/component-helpers v0.21.4
+	k8s.io/klog/hack/tools v0.0.0-20210917071902-331d2323a192
 	k8s.io/klog/v2 v2.8.0
 	k8s.io/kube-aggregator v0.0.0
 	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
 	k8s.io/kube-scheduler v0.21.4
 	k8s.io/kubernetes v1.21.4
+	k8s.io/utils v0.0.0-20201110183641-67b214c5f920
 	sigs.k8s.io/yaml v1.2.0
 )
 

@@ -122,13 +122,11 @@ autogen: update-vendor
 integration-test: install-etcd autogen
 	hack/integration-test.sh
 
-.PHONY: verify-gofmt
-verify-gofmt:
+.PHONY: verify
+verify: autogen
 	hack/verify-gofmt.sh
-
-.PHONY: verify-crdgen
-verify-crdgen: autogen
 	hack/verify-crdgen.sh
+	hack/verify-structured-logging.sh
 
 .PHONY: clean
 clean:

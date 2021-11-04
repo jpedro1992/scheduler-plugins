@@ -18,7 +18,9 @@ package integration
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
+	"sigs.k8s.io/yaml"
 	"testing"
 	"time"
 
@@ -160,7 +162,7 @@ func TestCapacityScheduling(t *testing.T) {
 		}
 	}
 
-	for _, ns := range []string{"ns1", "ns2"} {
+	for _, ns := range []string{"ns1", "ns2", "ns3"} {
 		_, err := cs.CoreV1().Namespaces().Create(ctx, &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
 		if err != nil && !errors.IsAlreadyExists(err) {
@@ -501,7 +503,91 @@ func TestCapacityScheduling(t *testing.T) {
 				},
 			},
 		},
-	} {
+		{
+			name:       "cross-namespace preemption with three elasticquota",
+			namespaces: []string{"ns1", "ns2", "ns3"},
+			existPods: []*v1.Pod{
+				util.MakePod("t7-p1", "ns1", 0, 1, highPriority, "t7-p1", "fake-node-1"),
+				util.MakePod("t7-p2", "ns1", 0, 1, midPriority, "t7-p2", "fake-node-2"),
+				util.MakePod("t7-p3", "ns1", 0, 1, midPriority, "t7-p3", "fake-node-2"),
+				util.MakePod("t7-p5", "ns2", 0, 1, midPriority, "t7-p5", "fake-node-2"),
+				util.MakePod("t7-p6", "ns2", 0, 1, midPriority, "t7-p6", "fake-node-1"),
+				util.MakePod("t7-p7", "ns2", 0, 1, midPriority, "t7-p7", "fake-node-2"),
+			},
+			addPods: []*v1.Pod{
+				util.MakePod("t7-p9", "ns3", 0, 1, midPriority, "t7-p9", ""),
+				util.MakePod("t7-p10", "ns3", 0, 1, midPriority, "t7-p10", ""),
+				util.MakePod("t7-p11", "ns3", 0, 1, midPriority, "t7-p11", ""),
+				util.MakePod("t7-p12", "ns3", 0, 1, midPriority, "t7-p12", ""),
+			},
+			elasticQuotas: []*v1alpha1.ElasticQuota{
+				{
+					TypeMeta:   metav1.TypeMeta{Kind: "ElasticQuota", APIVersion: "scheduling.sigs.k8s.io/v1alpha1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "eq1", Namespace: "ns1"},
+					Spec: v1alpha1.ElasticQuotaSpec{
+						Min: v1.ResourceList{
+							v1.ResourceMemory: *resource.NewQuantity(100, resource.DecimalSI),
+							v1.ResourceCPU:    *resource.NewMilliQuantity(1, resource.DecimalSI),
+						},
+						Max: v1.ResourceList{
+							v1.ResourceMemory: *resource.NewQuantity(200, resource.DecimalSI),
+							v1.ResourceCPU:    *resource.NewMilliQuantity(3, resource.DecimalSI),
+						},
+					},
+				},
+				{
+					TypeMeta:   metav1.TypeMeta{Kind: "ElasticQuota", APIVersion: "scheduling.sigs.k8s.io/v1alpha1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "eq2", Namespace: "ns2"},
+					Spec: v1alpha1.ElasticQuotaSpec{
+						Min: v1.ResourceList{
+							v1.ResourceMemory: *resource.NewQuantity(100, resource.DecimalSI),
+							v1.ResourceCPU:    *resource.NewMilliQuantity(3, resource.DecimalSI),
+						},
+						Max: v1.ResourceList{
+							v1.ResourceMemory: *resource.NewQuantity(200, resource.DecimalSI),
+							v1.ResourceCPU:    *resource.NewMilliQuantity(3, resource.DecimalSI),
+						},
+					},
+				},
+				{
+					TypeMeta:   metav1.TypeMeta{Kind: "ElasticQuota", APIVersion: "scheduling.sigs.k8s.io/v1alpha1"},
+					ObjectMeta: metav1.ObjectMeta{Name: "eq3", Namespace: "ns3"},
+					Spec: v1alpha1.ElasticQuotaSpec{
+						Min: v1.ResourceList{
+							v1.ResourceMemory: *resource.NewQuantity(100, resource.DecimalSI),
+							v1.ResourceCPU:    *resource.NewMilliQuantity(3, resource.DecimalSI),
+						},
+						Max: v1.ResourceList{
+							v1.ResourceMemory: *resource.NewQuantity(200, resource.DecimalSI),
+							v1.ResourceCPU:    *resource.NewMilliQuantity(4, resource.DecimalSI),
+						},
+					},
+				},
+			},
+			expectedPods: []*v1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p1", Namespace: "ns1"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p5", Namespace: "ns2"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p6", Namespace: "ns2"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p7", Namespace: "ns2"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p9", Namespace: "ns3"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p10", Namespace: "ns3"},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "t7-p11", Namespace: "ns3"},
+				},
+			},
+		}} {
 		t.Run(tt.name, func(t *testing.T) {
 			defer cleanupElasticQuotas(ctx, extClient, tt.elasticQuotas)
 			defer testutil.CleanupPods(cs, t, tt.existPods)
@@ -555,89 +641,18 @@ func TestCapacityScheduling(t *testing.T) {
 }
 
 func makeElasticQuotaCRD() *apiextensionsv1.CustomResourceDefinition {
-	return &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "elasticquotas.scheduling.sigs.k8s.io",
-			Annotations: map[string]string{
-				"api-approved.kubernetes.io": "https://github.com/kubernetes-sigs/scheduler-plugins/pull/50",
-			},
-		},
-		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: scheduling.GroupName,
-			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:       "ElasticQuota",
-				Plural:     "elasticquotas",
-				Singular:   "elasticquota",
-				ShortNames: []string{"eq", "eqs"},
-			},
-			Scope: apiextensionsv1.NamespaceScoped,
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{{Name: "v1alpha1", Served: true, Storage: true,
-				Schema: &apiextensionsv1.CustomResourceValidation{
-					OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-						Type: "object",
-						Properties: map[string]apiextensionsv1.JSONSchemaProps{
-							"spec": {
-								Type: "object",
-								Properties: map[string]apiextensionsv1.JSONSchemaProps{
-									"min": {
-										Type: "object",
-										AdditionalProperties: &apiextensionsv1.JSONSchemaPropsOrBool{
-											Schema: &apiextensionsv1.JSONSchemaProps{
-												AnyOf: []apiextensionsv1.JSONSchemaProps{
-													{
-														Type: "integer",
-													},
-													{
-														Type: "string",
-													},
-												},
-												XIntOrString: true,
-											},
-										},
-									},
-									"max": {
-										Type: "object",
-										AdditionalProperties: &apiextensionsv1.JSONSchemaPropsOrBool{
-											Schema: &apiextensionsv1.JSONSchemaProps{
-												AnyOf: []apiextensionsv1.JSONSchemaProps{
-													{
-														Type: "integer",
-													},
-													{
-														Type: "string",
-													},
-												},
-												XIntOrString: true,
-											},
-										},
-									},
-								},
-							},
-							"status": {
-								Type: "object",
-								Properties: map[string]apiextensionsv1.JSONSchemaProps{
-									"used": {
-										Type: "object",
-										AdditionalProperties: &apiextensionsv1.JSONSchemaPropsOrBool{
-											Schema: &apiextensionsv1.JSONSchemaProps{
-												AnyOf: []apiextensionsv1.JSONSchemaProps{
-													{
-														Type: "integer",
-													},
-													{
-														Type: "string",
-													},
-												},
-												XIntOrString: true,
-											},
-										}},
-								},
-							},
-						},
-					},
-				}}},
-		},
+	content, err := ioutil.ReadFile("../../manifests/capacityscheduling/crd.yaml")
+	if err != nil {
+		return &apiextensionsv1.CustomResourceDefinition{}
 	}
+
+	elasticquotasCRD := &apiextensionsv1.CustomResourceDefinition{}
+	err = yaml.Unmarshal(content, elasticquotasCRD)
+	if err != nil {
+		return &apiextensionsv1.CustomResourceDefinition{}
+	}
+
+	return elasticquotasCRD
 }
 
 func createElasticQuotas(ctx context.Context, client versioned.Interface, elasticQuotas []*v1alpha1.ElasticQuota) error {

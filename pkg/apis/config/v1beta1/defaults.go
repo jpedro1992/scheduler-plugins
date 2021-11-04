@@ -100,9 +100,7 @@ func SetDefaultsNodeResourcesAllocatableArgs(obj *NodeResourcesAllocatableArgs) 
 
 // SetDefaultsCapacitySchedulingArgs sets the default parameters for CapacityScheduling plugin.
 func SetDefaultsCapacitySchedulingArgs(obj *CapacitySchedulingArgs) {
-	if obj.KubeConfigPath == nil {
-		obj.KubeConfigPath = &defaultKubeConfigPath
-	}
+	// TODO(k/k#96427): get KubeConfigPath and KubeMaster from configuration or command args.
 }
 
 // SetDefaultTargetLoadPackingArgs sets the default parameters for TargetLoadPacking plugin
@@ -117,15 +115,14 @@ func SetDefaultTargetLoadPackingArgs(args *TargetLoadPackingArgs) {
 	if args.TargetUtilization == nil || *args.TargetUtilization <= 0 {
 		args.TargetUtilization = &DefaultTargetUtilizationPercent
 	}
+	if args.WatcherAddress == nil && args.MetricProvider.Type == "" {
+		args.MetricProvider.Type = MetricProviderType(DefaultMetricProviderType)
+	}
 }
 
 // SetDefaultLoadVariationRiskBalancingArgs sets the default parameters for LoadVariationRiskBalancing plugin
 func SetDefaultLoadVariationRiskBalancingArgs(args *LoadVariationRiskBalancingArgs) {
-	metricProviderType := string(args.MetricProvider.Type)
-	validMetricProviderType := metricProviderType == string(pluginConfig.KubernetesMetricsServer) ||
-		metricProviderType == string(pluginConfig.Prometheus) ||
-		metricProviderType == string(pluginConfig.SignalFx)
-	if args.WatcherAddress == nil && !validMetricProviderType {
+	if args.WatcherAddress == nil && args.MetricProvider.Type == "" {
 		args.MetricProvider.Type = MetricProviderType(DefaultMetricProviderType)
 	}
 	if args.SafeVarianceMargin == nil || *args.SafeVarianceMargin < 0 {

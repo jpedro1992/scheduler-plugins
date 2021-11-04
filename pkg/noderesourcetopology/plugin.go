@@ -42,7 +42,7 @@ type nodeResTopologyPlugin struct {
 }
 
 type tmScopeHandler struct {
-	filter func(pod *v1.Pod, zones topologyv1alpha1.ZoneList) *framework.Status
+	filter func(pod *v1.Pod, zones topologyv1alpha1.ZoneList, nodeInfo *framework.NodeInfo) *framework.Status
 	score  func(pod *v1.Pod, zones topologyv1alpha1.ZoneList, scorerFn scoreStrategy, resourceToWeightMap resourceToWeightMap) (int64, *framework.Status)
 }
 
@@ -86,7 +86,7 @@ func (tm *TopologyMatch) Name() string {
 
 // New initializes a new plugin and returns it.
 func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-	klog.V(5).Infof("creating new TopologyMatch plugin")
+	klog.V(5).InfoS("Creating new TopologyMatch plugin")
 	tcfg, ok := args.(*apiconfig.NodeResourceTopologyMatchArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type NodeResourceTopologyMatchArgs, got %T", args)
