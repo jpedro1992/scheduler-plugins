@@ -70,7 +70,7 @@ For example, multiple replicas in a database application may require frequent co
 Insufficient network capacity in nodes would lead to increasing delay or packet drops,
 which will degrade the quality of service for applications.
 
-We propose a **Network-Aware Scheduling framework** for Kubernetes that focus on delivering low latency to end-users
+We propose a series of **Network-Aware Scheduling Plugins** for Kubernetes that focus on delivering low latency to end-users
 and ensuring bandwidth reservations in pod scheduling.
 
 This work significantly extends the previous work open-sourced [here](https://github.com/jpedro1992/sfc-controller) 
