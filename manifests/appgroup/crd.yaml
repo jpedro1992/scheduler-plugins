@@ -1,0 +1,151 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: "To be Defined" # edited manually
+    controller-gen.kubebuilder.io/version: v0.6.2
+  creationTimestamp: null
+  name: appgroups.scheduling.sigs.k8s.io
+spec:
+  group: scheduling.sigs.k8s.io
+  names:
+    kind: AppGroup
+    listKind: AppGroupList
+    plural: appgroups
+    singular: appgroup
+    shortNames:
+      - ag
+      - ags
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AppGroup establishes a service dependency graph among different Pods.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AppGroup defines the number of Pods and which Pods belong to the group.
+            properties:
+              numMembers:
+                format: int32
+                type: integer
+                minimum: 1
+                description: Number of Pods belonging to the App Group
+              topologySortingAlgorithm:
+                type: string
+                description: The algorithm for TopologyOrder (Status)
+              pods:
+                description: The Pods belonging to the group array of AppGroupPod
+                items:
+                  description: AppGroupPod contains information about one Pod.
+                  properties:
+                    podName:
+                      type: string
+                      description: Name of the Pod.
+                    dependencies:
+                      items:
+                        description: DependenciesList establishes dependencies between pods.
+                        properties:
+                          podName:
+                            description: Name of the Pod.
+                            type: string
+                          minBandwidth:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: Bandwidth demand between both Pods.
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          maxNetworkCost:
+                            type: integer
+                            default: 0
+                            minimum: 0
+                            maximum: 10000
+                            format: int64
+                            description: The max Network Cost between both Pods.
+                        required:
+                        - podName
+                        type: object
+                      type: array
+                  required:
+                  - podName
+                  type: object
+                type: array
+            required:
+            - numMembers
+            - topologySortingAlgorithm
+            - pods
+            type: object
+          status:
+            description: Record Pod Allocations (Pod id, hostnames).
+            properties:
+              runningPods:
+                description: The number of actively running pods.
+                format: int32
+                type: integer
+                minimum: 0
+              podsScheduled:
+                description: The Pods scheduled in the cluster (ScheduledList)
+                items:
+                  description: ScheduledInfo contains information about one Pod.
+                  properties:
+                    podName:
+                      type: string
+                      description: Name of the Pod.
+                    replicaID:
+                      type: string
+                      description: Pod ID
+                    hostname:
+                      type: string
+                      description: Hostname allocating Pod instance
+                  type: object
+                type: array
+              scheduleStartTime:
+                description: ScheduleStartTime of the AppGroup
+                format: date-time
+                type: string
+              topologyCalculationTime:
+                description: topologyCalculationTime of the AppGroup
+                format: date-time
+                type: string
+              topologyOrder:
+                description: The optimal order to schedule pods on this App Group based on a given algorithm.
+                items:
+                  description: Pod Name and Pod Priority index
+                  properties:
+                    podName:
+                      type: string
+                      description: Name of the Pod.
+                    index:
+                      type: integer
+                      default: 1
+                      minimum: 1
+                      format: int64
+                      description: Priority index for each Pod (e.g., 1, 2, ...)
+                          (1 means pod should be scheduled first in the AppGroup)
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

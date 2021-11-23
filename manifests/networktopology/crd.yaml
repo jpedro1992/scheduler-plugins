@@ -1,0 +1,178 @@
+
+---
+# Network CRD spec
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: "To be Defined" # edited manually
+    controller-gen.kubebuilder.io/version: v0.6.2
+  creationTimestamp: null
+  name: networktopologies.scheduling.sigs.k8s.io
+spec:
+  group: scheduling.sigs.k8s.io
+  names:
+    kind: NetworkTopology
+    listKind: NetworkTopologyList
+    plural: networktopologies
+    singular: networktopology
+    shortNames:
+      - net-topo
+      - nt
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Network Topology describes the cluster network topology.
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: NetworkTopology defines the zones and regions of the cluster.
+              properties:
+                weights:
+                  description: The weights of the cluster (WeightList)
+                  items:
+                    description: WeightInfo contains information about weights of a given algorithm.
+                    properties:
+                      name:
+                        type: string
+                        description: Algorithm Name (e.g., UserDefined)
+                      regionCostList:
+                        description: Define weights for cross regions in the cluster (CostList)
+                        items:
+                          description: OriginInfo contains information about one region.
+                          properties:
+                            origin:
+                              type: string
+                              description: Region Name (Origin)
+                            costs:
+                              description: Costs contains an array of CostInfo objects.
+                              items:
+                                description: CostInfo contains information about one region.
+                                properties:
+                                  destination:
+                                    type: string
+                                    description: Region name (Destination)
+                                  bandwidthCapacity:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Bandwidth Capacity between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  bandwidthAllocated:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Bandwidth allocated between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  networkCost:
+                                    type: integer
+                                    default: 0
+                                    minimum: 0
+                                    format: int64
+                                    description: Cost from Origin to Destination
+                                required:
+                                - destination
+                                - networkCost
+                                type: object
+                              type: array
+                          required:
+                          - origin
+                          - costs
+                          type: object
+                        type: array
+                      zoneCostList:
+                        description: Define weights for zones in the same region (CostList)
+                        items:
+                          description: OriginInfo contains information about one zone.
+                          properties:
+                            origin:
+                              type: string
+                              description: Zone Name (Origin)
+                            costs:
+                              description: Costs contains an array of CostInfo objects.
+                              items:
+                                description: CostInfo contains information about one zone.
+                                properties:
+                                  destination:
+                                    type: string
+                                    description: Zone name (Destination)
+                                  bandwidthCapacity:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    description: Bandwidth Capacity between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  bandwidthAllocated:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    description: Bandwidth allocated between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  networkCost:
+                                    type: integer
+                                    default: 0
+                                    minimum: 0
+                                    format: int64
+                                    description: Cost from Origin to Destination
+                                required:
+                                  - destination
+                                  - networkCost
+                                type: object
+                              type: array
+                          required:
+                            - origin
+                            - costs
+                          type: object
+                        type: array
+                    required:
+                    - name
+                    - regionCostList
+                    - zoneCostList
+                    type: object
+                  type: array
+                configmapName:
+                  description: ConfigmapName to be used for cost calculation
+                  type: string
+              required:
+              - weights
+              - configmapName
+              type: object
+            status:
+              description: Record nodeCount and weight calculation time.
+              properties:
+                nodeCount:
+                  description: The number of nodes in the cluster.
+                  format: int64
+                  type: integer
+                  minimum: 0
+                weightCalculationTime:
+                  description: weightCalculationTime for calculated weights
+                  format: date-time
+                  type: string
+              type: object
+          type: object
+      served: true
+      storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

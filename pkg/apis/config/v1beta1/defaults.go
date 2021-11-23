@@ -153,3 +153,49 @@ func SetDefaultsNodeResourceTopologyMatchArgs(obj *NodeResourceTopologyMatchArgs
 		}
 	}
 }
+
+// SetDefaultsTopologicalSortArgs sets the default parameters for TopologicalSortArgs plugin.
+func SetDefaultsTopologicalSortArgs(obj *TopologicalSortArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+}
+
+// SetDefaultsNodeNetworkCostFitArgs sets the default parameters for NodeNetworkCostFitArgs plugin.
+func SetDefaultsNodeNetworkCostFitArgs(obj *NodeNetworkCostFitArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+
+	if obj.WeightsName == nil {
+		obj.WeightsName = &defaultWeightsName
+	}
+
+	if obj.NetworkTopologyName == nil {
+		obj.NetworkTopologyName = &defaultNetworkTopologyName
+	}
+}
+
+// SetDefaultsNetworkMinCostArgs sets the default parameters for NetworkMinCostArgs plugin.
+func SetDefaultsNetworkMinCostArgs(obj *NetworkMinCostArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+
+	if obj.WeightsName == nil {
+		obj.WeightsName = &defaultWeightsName
+	}
+
+	if obj.NetworkTopologyName == nil {
+		obj.NetworkTopologyName = &defaultNetworkTopologyName
+	}
+}

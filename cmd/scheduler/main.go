@@ -19,6 +19,9 @@ package main
 import (
 	"math/rand"
 	"os"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/networkmincost"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/nodenetworkcostfit"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/topologicalsort"
 	"time"
 
 	"k8s.io/component-base/logs"
@@ -54,6 +57,9 @@ func main() {
 		app.WithPlugin(crossnodepreemption.Name, crossnodepreemption.New),
 		app.WithPlugin(podstate.Name, podstate.New),
 		app.WithPlugin(qos.Name, qos.New),
+		app.WithPlugin(topologicalsort.Name, topologicalsort.New),
+		app.WithPlugin(nodenetworkcostfit.Name, nodenetworkcostfit.New),
+		app.WithPlugin(networkmincost.Name, networkmincost.New),
 	)
 
 	// TODO: once we switch everything over to Cobra commands, we can go back to calling
