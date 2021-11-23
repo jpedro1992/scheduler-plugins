@@ -1,1 +1,137 @@
-../appgroup/crd.yaml
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/scheduler-plugins/pull/52
+    controller-gen.kubebuilder.io/version: v0.6.2
+  creationTimestamp: null
+  name: appgroups.scheduling.sigs.k8s.io
+spec:
+  group: scheduling.sigs.k8s.io
+  names:
+    kind: AppGroup
+    listKind: AppGroupList
+    plural: appgroups
+    singular: appgroup
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AppGroup is a collection of Pods belonging to the same application
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AppGroupSpec defines the Min and Max for Quota.
+            properties:
+              numMembers:
+                description: NumMembers defines the number of Pods belonging to the
+                  App Group
+                format: int32
+                type: integer
+              pods:
+                description: Pods defines the pods belonging to the group
+                items:
+                  description: AppGroupPod represents the number of Pods belonging
+                    to the App Group.
+                  properties:
+                    dependencies:
+                      description: Dependencies of the Pod.
+                      items:
+                        description: DependenciesInfo contains information about one
+                          dependency.
+                        properties:
+                          maxNetworkCost:
+                            description: Max Network Cost between pods
+                            format: int64
+                            type: integer
+                          minBandwidth:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: MinBandwidth between pods
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          podName:
+                            description: Name of the Pod.
+                            type: string
+                        type: object
+                      type: array
+                    podName:
+                      description: Name of the Pod.
+                      type: string
+                  type: object
+                type: array
+              topologySortingAlgorithm:
+                description: The preferred Topology Sorting Algorithm
+                type: string
+            type: object
+          status:
+            description: AppGroupStatus defines the observed use.
+            properties:
+              podsScheduled:
+                description: PodsScheduled defines pod allocations (Pod name, Pod
+                  id, hostname).
+                items:
+                  description: AppGroupScheduled represents the Pod Affinities of
+                    a given Pod
+                  properties:
+                    hostname:
+                      description: Pod Hostname
+                      type: string
+                    podName:
+                      description: Pod Name
+                      type: string
+                    replicaID:
+                      description: Replica ID
+                      type: string
+                  type: object
+                type: array
+              runningPods:
+                description: The number of actively running pods.
+                format: int32
+                type: integer
+              scheduleStartTime:
+                description: ScheduleStartTime of the group
+                format: date-time
+                type: string
+              topologyCalculationTime:
+                description: TopologyCalculationTime of the group
+                format: date-time
+                type: string
+              topologyOrder:
+                description: Topology order for TopSort plugin (QueueSort)
+                items:
+                  description: AppGroupTopology represents the calculated order for
+                    the given AppGroup
+                  properties:
+                    index:
+                      format: int32
+                      type: integer
+                    podName:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

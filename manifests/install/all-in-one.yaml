@@ -6,7 +6,7 @@ metadata:
   name: system:kube-scheduler:plugins
 rules:
 - apiGroups: ["scheduling.sigs.k8s.io"]
-  resources: ["podgroups", "elasticquotas"]
+  resources: ["podgroups", "elasticquotas", "appgroups", "networktopologies"]
   verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
 ---
 kind: ClusterRoleBinding
@@ -41,10 +41,10 @@ metadata:
   name: scheduler-plugins-controller
 rules:
 - apiGroups: [""]
-  resources: ["pods"]
+  resources: ["pods", "nodes", "configmaps"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["scheduling.sigs.k8s.io"]
-  resources: ["podgroups", "elasticquotas"]
+  resources: ["podgroups", "elasticquotas", "appgroups", "networktopologies"]
   verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
 ---
 kind: ClusterRoleBinding
@@ -80,5 +80,5 @@ spec:
       serviceAccount: scheduler-plugins-controller
       containers:
       - name: scheduler-plugins-controller
-        image: k8s.gcr.io/scheduler-plugins/controller:v0.21.6
+        image: localhost:5000/scheduler-plugins/controller:latest #k8s.gcr.io/scheduler-plugins/controller:v0.21.6
         imagePullPolicy: IfNotPresent
