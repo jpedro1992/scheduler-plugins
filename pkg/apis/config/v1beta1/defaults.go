@@ -73,6 +73,9 @@ var (
 		{Name: string(v1.ResourceCPU), Weight: 1},
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
+
+	defaultWeightsName string = "UserDefined"
+	defaultNetworkTopologyName string = "nt-default"
 )
 
 // SetDefaultsCoschedulingArgs sets the default parameters for Coscheduling plugin.
