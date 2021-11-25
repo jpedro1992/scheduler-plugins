@@ -260,8 +260,9 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	scheduledList := schedv1alpha1.ScheduledList{}
 
 	for _, p := range pods {
+		ls := p.GetLabels()
 		scheduledInfo := schedv1alpha1.ScheduledInfo{
-			PodName:   p.GetName(),
+			PodName: ls[util.DeploymentLabel],
 			ReplicaID: string(p.GetUID()),
 			Hostname:  p.Spec.Hostname,
 		}

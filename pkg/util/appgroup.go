@@ -28,6 +28,7 @@ import (
 const (
 // AppGroupLabel is the default label of app group for network aware plugin
 AppGroupLabel = "app-group.scheduling.sigs.k8s.io"
+DeploymentLabel = "app"
 
 // Topological Sorting algorithms supported by AppGroup
 AppGroupKahnSort      = "KahnSort"

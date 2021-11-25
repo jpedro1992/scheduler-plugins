@@ -228,11 +228,13 @@ func TestAppGroupController_Run(t *testing.T) {
 
 func makePodsAppGroup(podNames []string, agName string, phase v1.PodPhase) []*v1.Pod {
 	pds := make([]*v1.Pod, 0)
+	i := 0
 	for _, name := range podNames {
-		pod := st.MakePod().Namespace("default").Name(name).Obj()
-		pod.Labels = map[string]string{util.AppGroupLabel: agName}
+		pod := st.MakePod().Namespace("default").Name(name + fmt.Sprint(i)).Obj()
+		pod.Labels = map[string]string{util.AppGroupLabel: agName, util.DeploymentLabel: name}
 		pod.Status.Phase = phase
 		pds = append(pds, pod)
+		i += i
 	}
 	return pds
 }
