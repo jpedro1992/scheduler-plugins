@@ -39,7 +39,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/apimachinery/pkg/types"
 
 	schedv1alpha1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
@@ -278,11 +277,15 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 
 		for _, n := range nodes {
 			for _, a := range n.Status.Addresses {
-					if a.Address == ip{
-						hostname = n.Name
-					}
+				if a.Address == ip{
+					hostname = n.Name
+					break
 				}
 			}
+			if hostname != ""{
+				break
+			}
+		}
 
 		scheduledInfo := schedv1alpha1.ScheduledInfo{
 			PodName: ls[util.DeploymentLabel],
