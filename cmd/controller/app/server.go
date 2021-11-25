@@ -78,7 +78,7 @@ func Run(s *ServerRunOptions) error {
 
 	pgCtrl := controller.NewPodGroupController(kubeClient, pgInformer, podInformer, schedClient)
 	eqCtrl := controller.NewElasticQuotaController(kubeClient, eqInformer, podInformer, schedClient)
-	agCtrl := controller.NewAppGroupController(kubeClient, agInformer, podInformer, schedClient)
+	agCtrl := controller.NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, schedClient)
 	ntCtrl := controller.NewNetworkTopologyController(kubeClient, ntInformer, nodeInformer, configmapInformer, schedClient)
 
 	run := func(ctx context.Context) {

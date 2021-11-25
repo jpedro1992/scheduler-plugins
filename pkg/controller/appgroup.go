@@ -39,6 +39,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/apimachinery/pkg/types"
 
 	schedv1alpha1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
@@ -53,8 +54,10 @@ type AppGroupController struct {
 	agQueue         workqueue.RateLimitingInterface
 	agLister        schedlister.AppGroupLister
 	podLister       corelister.PodLister
+	nodeLister      corelister.NodeLister
 	agListerSynced  cache.InformerSynced
 	podListerSynced cache.InformerSynced
+	nodeListerSynced      cache.InformerSynced
 	agClient        schedclientset.Interface
 }
 
@@ -62,6 +65,7 @@ type AppGroupController struct {
 func NewAppGroupController(client kubernetes.Interface,
 	agInformer schedinformer.AppGroupInformer,
 	podInformer coreinformer.PodInformer,
+	nodeInformer coreinformer.NodeInformer,
 	agClient schedclientset.Interface) *AppGroupController {
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: client.CoreV1().Events(v1.NamespaceAll)})
@@ -87,8 +91,10 @@ func NewAppGroupController(client kubernetes.Interface,
 
 	ctrl.agLister = agInformer.Lister()
 	ctrl.podLister = podInformer.Lister()
+	ctrl.nodeLister = nodeInformer.Lister()
 	ctrl.agListerSynced = agInformer.Informer().HasSynced
 	ctrl.podListerSynced = podInformer.Informer().HasSynced
+	ctrl.nodeListerSynced = nodeInformer.Informer().HasSynced
 	ctrl.agClient = agClient
 	return ctrl
 }
@@ -234,6 +240,12 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	agCopy := ag.DeepCopy()
 	selector := labels.Set(map[string]string{util.AppGroupLabel: agCopy.Name}).AsSelector()
 
+	nodes, err := ctrl.nodeLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "List nodes failed during syncHandler", "appGroup", klog.KObj(agCopy))
+		return err
+	}
+
 	pods, err := ctrl.podLister.List(selector)
 
 	if err != nil {
@@ -261,10 +273,21 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 
 	for _, p := range pods {
 		ls := p.GetLabels()
+		ip := p.Status.HostIP
+		var hostname string
+
+		for _, n := range nodes {
+			for _, a := range n.Status.Addresses {
+					if a.Address == ip{
+						hostname = n.Name
+					}
+				}
+			}
+
 		scheduledInfo := schedv1alpha1.ScheduledInfo{
 			PodName: ls[util.DeploymentLabel],
 			ReplicaID: string(p.GetUID()),
-			Hostname:  p.Spec.Hostname,
+			Hostname:  hostname,
 		}
 		scheduledList = append(scheduledList, scheduledInfo)
 	}

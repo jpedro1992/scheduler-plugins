@@ -37,7 +37,12 @@ AppGroupReverseKahn   = "ReverseKahn"
 AppGroupReverseTarjan = "ReverseTarjan"
 AppGroupAlternateKahn   = "AlternateKahn"
 AppGroupAlternateTarjan = "AlternateTarjan"
+
+NodeExternalIP  NodeAddressType = "ExternalIP"
+NodeInternalIP  NodeAddressType = "InternalIP"
 )
+
+type NodeAddressType string
 
 // Sort AppGroupTopology by Pod Name
 type ByPodName []schedulingv1.TopologyInfo
