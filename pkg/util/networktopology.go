@@ -7,7 +7,7 @@ import (
 
 const (
 	// netperf_p90_latency_microseconds.origin.$node.destination.$randNodePairs{$node}=$sc2\n";
-	ConfigmapTemplate = "netperf_p90_latency_microseconds.origin.%s.destination.%s"
+	ConfigmapTemplate = "netperf_p90_latency_microseconds.origin.%s.destination.%s="
 
 	// constant for Algorithm Selection
 	Dijkstra = "Dijkstra"
