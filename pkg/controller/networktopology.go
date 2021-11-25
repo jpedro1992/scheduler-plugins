@@ -475,6 +475,7 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 				// get cost from configmap
 				key := util.GetConfigmapCostQuery(n1.Name, n2.Name)
 				klog.Infof("Key: %v", key)
+				klog.Infof("configmap.Data: %v", configmap.Data)
 
 				cost, err := strconv.Atoi(configmap.Data[key])
 				if err != nil {
