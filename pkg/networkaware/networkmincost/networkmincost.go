@@ -124,8 +124,8 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 		return score, framework.NewStatus(framework.Error, "Error while returning NetworkTopology: min score")
 	}
 
-	klog.V(6).Info("AppGroup CRD: ", appGroup.Name)
-	klog.V(6).Info("Network Topology CRD: ", networkTopology.Name)
+	klog.Info("AppGroup CRD: ", appGroup.Name)
+	klog.Info("Network Topology CRD: ", networkTopology.Name)
 
 	// Check if pods already available
 	if appGroup.Status.PodsScheduled == nil {
@@ -135,7 +135,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
 	for _, p := range appGroup.Spec.Pods {
-		if p.PodName == pod.Name {
+		if p.PodName == pod.GetName() {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
@@ -147,7 +147,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 		return score, framework.NewStatus(framework.Success, "The pod does not have dependencies: minimum score")
 	}
 
-	klog.V(6).Info("dependencyList: ", dependencyList)
+	klog.Info("dependencyList: ", dependencyList)
 
 	// Create map for cost / destinations. Search for costs faster...
 	var costMap = make(map[networkAwareUtil.CostKey]int64)
@@ -162,8 +162,8 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	region := networkAwareUtil.GetNodeRegion(nodeInfo.Node())
 	zone := networkAwareUtil.GetNodeZone(nodeInfo.Node())
 
-	klog.V(6).Info("Node Region: ", region)
-	klog.V(6).Info("Node Zone: ", zone)
+	klog.Info("Node Region: ", region)
+	klog.Info("Node Zone: ", zone)
 
 	if pl.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
@@ -258,7 +258,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	// Return Accumulated Cost as score
 	score = cost
 
-	klog.V(6).Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
+	klog.Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
 	return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 }
 

@@ -261,12 +261,14 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 
 	for _, p := range pods {
 		scheduledInfo := schedv1alpha1.ScheduledInfo{
-			PodName:   p.Name,
+			PodName:   p.GetName(),
 			ReplicaID: string(p.GetUID()),
 			Hostname:  p.Spec.Hostname,
 		}
 		scheduledList = append(scheduledList, scheduledInfo)
 	}
+
+	klog.Info("scheduledList: ", scheduledList)
 
 	agCopy.Status.PodsScheduled = scheduledList
 
