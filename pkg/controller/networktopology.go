@@ -367,18 +367,21 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 
 		klog.V(5).Infof("Graph: %v", ctrl.nodeGraph)
 
-		ntCopy.Spec.Weights = schedv1alpha1.WeightList{
-			schedv1alpha1.WeightInfo{
-				Name:           util.Manual,
-				RegionCostList: manualRegionCosts,
-				ZoneCostList:   manualZoneCosts,
-			},
-			schedv1alpha1.WeightInfo{
-				Name:           util.Dijkstra,
-				RegionCostList: getRegionWeights(ctrl, nodes),
-				ZoneCostList:   getZoneWeights(ctrl, nodes),
-			},
-		}
+		weights := schedv1alpha1.WeightList{}
+
+		weights = append(weights, schedv1alpha1.WeightInfo{
+									Name:           util.Manual,
+									RegionCostList: manualRegionCosts,
+									ZoneCostList:   manualZoneCosts,
+								}, )
+
+		weights = append(weights, schedv1alpha1.WeightInfo{
+			Name:           util.Dijkstra,
+			RegionCostList: getRegionWeights(ctrl, nodes),
+			ZoneCostList:   getZoneWeights(ctrl, nodes),
+		}, )
+
+		ntCopy.Spec.Weights = weights
 
 		ntCopy.Status.WeightCalculationTime = metav1.Time{Time: time.Now()}
 
@@ -401,18 +404,21 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 			return err
 		}
 
-		ntCopy.Spec.Weights = schedv1alpha1.WeightList{
-			schedv1alpha1.WeightInfo{
-				Name:           util.Manual,
-				RegionCostList: manualRegionCosts,
-				ZoneCostList:   manualZoneCosts,
-			},
-			schedv1alpha1.WeightInfo{
-				Name:           util.Dijkstra,
-				RegionCostList: getRegionWeights(ctrl, nodes),
-				ZoneCostList:   getZoneWeights(ctrl, nodes),
-			},
-		}
+		weights := schedv1alpha1.WeightList{}
+
+		weights = append(weights, schedv1alpha1.WeightInfo{
+			Name:           util.Manual,
+			RegionCostList: manualRegionCosts,
+			ZoneCostList:   manualZoneCosts,
+		}, )
+
+		weights = append(weights, schedv1alpha1.WeightInfo{
+			Name:           util.Dijkstra,
+			RegionCostList: getRegionWeights(ctrl, nodes),
+			ZoneCostList:   getZoneWeights(ctrl, nodes),
+		}, )
+
+		ntCopy.Spec.Weights = weights
 
 		ntCopy.Status.WeightCalculationTime = metav1.Time{Time: time.Now()}
 
@@ -449,7 +455,7 @@ func (ctrl *NetworkTopologyController) patchNetworkTopology(old, new *schedv1alp
 func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v1.ConfigMap) error {
 	klog.V(5).InfoS("NetworkTopology SyncHandler: Update costs in the network graph... ")
 
-	/// Rebuild the graph
+	// Rebuild the graph
 	ctrl.regionGraph = util.NewGraph()
 	ctrl.zoneGraph = util.NewGraph()
 	ctrl.nodeGraph = util.NewGraph()
@@ -464,18 +470,18 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 				r2 := networkAwareUtil.GetNodeRegion(n2)
 				z2 := networkAwareUtil.GetNodeZone(n2)
 
-				klog.V(5).Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
+				klog.Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
 
 				// get cost from configmap
 				key := util.GetConfigmapCostQuery(n1.Name, n2.Name)
-				klog.V(5).Infof("Key: %v", key)
+				klog.Infof("Key: %v", key)
 
 				cost, err := strconv.Atoi(configmap.Data[key])
 				if err != nil {
 					klog.ErrorS(err, "Error converting cost...")
 				}
 
-				klog.V(5).Infof("Cost: %v", cost)
+				klog.Infof("Cost: %v", cost)
 
 				// Update Cost in the graph
 				ctrl.nodeGraph.AddEdge(n1.Name, n2.Name, cost)
@@ -531,7 +537,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node) schedv1
 					NetworkCost:        int64(cost),
 				}
 
-				klog.V(5).Infof("[Region Costs] Origin %v - Destination %v - Cost: %v", r1, r2, info.NetworkCost)
+				klog.Infof("[Region Costs] Origin %v - Destination %v - Cost: %v", r1, r2, info.NetworkCost)
 
 				costInfo = append(costInfo, info)
 			}
@@ -582,7 +588,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node) schedv1al
 						NetworkCost:        int64(cost),
 					}
 
-					klog.V(5).Infof("[Zone Costs] Origin %v - Destination %v - Cost: %v", z1, z2, info.NetworkCost)
+					klog.Infof("[Zone Costs] Origin %v - Destination %v - Cost: %v", z1, z2, info.NetworkCost)
 
 					costInfo = append(costInfo, info)
 				}
