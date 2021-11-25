@@ -182,9 +182,10 @@ func TestAppGroupController_Run(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(kubeClient, controller.NoResyncPeriodFunc())
 			agInformerFactory := schedinformer.NewSharedInformerFactory(agClient, controller.NoResyncPeriodFunc())
 			podInformer := informerFactory.Core().V1().Pods()
+			nodeInformer := informerFactory.Core().V1().Nodes()
 			agInformer := agInformerFactory.Scheduling().V1alpha1().AppGroups()
 
-			ctrl := NewAppGroupController(kubeClient, agInformer, podInformer, agClient)
+			ctrl := NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, agClient)
 
 			agInformerFactory.Start(ctx.Done())
 			informerFactory.Start(ctx.Done())

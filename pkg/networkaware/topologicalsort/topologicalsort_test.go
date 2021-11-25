@@ -200,9 +200,10 @@ func TestTopologicalSortLess(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(kubeClient, controller.NoResyncPeriodFunc())
 			agInformerFactory := schedinformer.NewSharedInformerFactory(agClient, controller.NoResyncPeriodFunc())
 			podInformer := informerFactory.Core().V1().Pods()
+			nodeInformer := informerFactory.Core().V1().Nodes()
 			agInformer := agInformerFactory.Scheduling().V1alpha1().AppGroups()
 
-			ctrl := ctrAppGroup.NewAppGroupController(kubeClient, agInformer, podInformer, agClient)
+			ctrl := ctrAppGroup.NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, agClient)
 
 			agInformerFactory.Start(ctx.Done())
 			informerFactory.Start(ctx.Done())
@@ -432,9 +433,10 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			informerFactory := informers.NewSharedInformerFactory(kubeClient, controller.NoResyncPeriodFunc())
 			agInformerFactory := schedinformer.NewSharedInformerFactory(agClient, controller.NoResyncPeriodFunc())
 			podInformer := informerFactory.Core().V1().Pods()
+			nodeInformer := informerFactory.Core().V1().Nodes()
 			agInformer := agInformerFactory.Scheduling().V1alpha1().AppGroups()
 
-			ctrl := ctrAppGroup.NewAppGroupController(kubeClient, agInformer, podInformer, agClient)
+			ctrl := ctrAppGroup.NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, agClient)
 
 			agInformerFactory.Start(ctx.Done())
 			informerFactory.Start(ctx.Done())
@@ -556,6 +558,7 @@ func makeAG(agName string, numMembers int32, topologySortingAlgorithm string, ap
 func makePod(name string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
 	label := make(map[string]string)
 	label[util.AppGroupLabel] = appGroup
+	label[util.DeploymentLabel] = name
 
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

@@ -286,6 +286,7 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 			scores[i].Score = framework.MaxNodeScore - int64(normCost)
 		}
 	}
+	klog.Infof("scores: %s", scores)
 	return nil
 }
 

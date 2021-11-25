@@ -106,26 +106,29 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 			return s.Less(pInfo1, pInfo2)
 		}
 
-		// Binary search to find both order index since topology list is ordered by Pod Name
-		var orderP1 = networkAwareUtil.FindPodOrder(appGroup.Status.TopologyOrder, pInfo1.Pod.Name)
-		var orderP2 = networkAwareUtil.FindPodOrder(appGroup.Status.TopologyOrder, pInfo2.Pod.Name)
+		labelsP1 := pInfo1.Pod.GetLabels()
+		labelsP2 := pInfo2.Pod.GetLabels()
 
-		klog.V(6).Infof("Pod %v order: %v and Pod %v order: %v.", pInfo1.Pod.Name, orderP1, pInfo2.Pod.Name, orderP2)
+		// Binary search to find both order index since topology list is ordered by Pod Name
+		var orderP1 = networkAwareUtil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP1[util.DeploymentLabel])
+		var orderP2 = networkAwareUtil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP2[util.DeploymentLabel])
+
+		klog.Infof("Pod %v order: %v and Pod %v order: %v.", labelsP1[util.DeploymentLabel], orderP1, labelsP2[util.DeploymentLabel], orderP2)
 
 		// Lower is better, thus invert result!
 		return !(orderP1 > orderP2)
 	} else { // Pods do not belong to the same App Group: follow the strategy from the QoS plugin
-		klog.V(6).Infof("Pod %v and %v do not belong to the same appGroup %v", pInfo1.Pod.Name, pInfo2.Pod.Name, p1AppGroup)
+		klog.Infof("Pod %v and %v do not belong to the same appGroup %v", pInfo1.Pod.Name, pInfo2.Pod.Name, p1AppGroup)
 		s := &qos.Sort{}
 		return s.Less(pInfo1, pInfo2)
 	}
 }
 
 func findAppGroupTopologicalSort(agName string, ts *TopologicalSort) (*v1alpha1.AppGroup, error) {
-	klog.V(5).Infof("namespaces: %s", ts.namespaces)
+	//klog.V(5).Infof("namespaces: %s", ts.namespaces)
 	var err error
 	for _, namespace := range ts.namespaces {
-		klog.V(5).Infof("data.lister: %v", ts.agLister)
+		//klog.V(5).Infof("data.lister: %v", ts.agLister)
 		// AppGroup couldn't be placed in several namespaces simultaneously
 		lister := ts.agLister
 		appGroup, err := (*lister).AppGroups(namespace).Get(agName)
