@@ -77,6 +77,8 @@ spec:
       labels:
         app: scheduler-plugins-controller
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
       serviceAccount: scheduler-plugins-controller
       containers:
       - name: scheduler-plugins-controller
