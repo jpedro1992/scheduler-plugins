@@ -470,28 +470,31 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 				r2 := networkAwareUtil.GetNodeRegion(n2)
 				z2 := networkAwareUtil.GetNodeZone(n2)
 
-				klog.Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
+				klog.V(5).Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
 
 				// get cost from configmap
 				key := util.GetConfigmapCostQuery(n1.Name, n2.Name)
-				klog.Infof("Key: %v", key)
-				klog.Infof("configmap.Data: %v", configmap.Data)
+
+				klog.V(5).Infof("Key: %v", key)
+				klog.V(5).Infof("configmap.Data: %v", configmap.Data)
 
 				cost, err := strconv.Atoi(configmap.Data[key])
 				if err != nil {
 					klog.ErrorS(err, "Error converting cost...")
 				}
 
-				klog.Infof("Cost: %v", cost)
+				klog.V(5).Infof("Cost: %v", cost)
 
 				// Update Cost in the graph
 				ctrl.nodeGraph.AddEdge(n1.Name, n2.Name, cost)
 
 				if r1 != r2 { // Different region
-					current, _ := ctrl.regionGraph.GetPath(r1, r2)
-					if current < cost { // Select higher cost!
-						ctrl.regionGraph.AddEdge(r1, r2, cost)
+					current, err := ctrl.regionGraph.GetPath(r1, r2)
+					if err != nil { // add average cost!
+							cost = (cost + current) / 2
+							ctrl.regionGraph.AddEdge(r1, r2, cost)
 					}
+					ctrl.regionGraph.AddEdge(r1, r2, cost)
 				} else if z1 != z2 { // Same region Different zone
 					// Add zone key to map
 					ctrl.ZoneMap[util.ZoneKey{
@@ -499,10 +502,12 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 						Z2: z2,
 					}] = true
 
-					current, _ := ctrl.zoneGraph.GetPath(z1, z2)
-					if current < cost { // Select higher cost!
+					current, err := ctrl.zoneGraph.GetPath(z1, z2)
+					if err != nil { // Add average cost
+						cost = (cost + current) / 2
 						ctrl.zoneGraph.AddEdge(z1, z2, cost)
 					}
+					ctrl.zoneGraph.AddEdge(z1, z2, cost)
 				}
 			}
 		}
