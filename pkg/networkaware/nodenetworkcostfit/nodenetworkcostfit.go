@@ -127,20 +127,21 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
+	ls := pod.GetLabels()
 	for _, p := range appGroup.Spec.Pods {
-		if p.PodName == pod.GetName() {
+		if p.PodName == ls[util.DeploymentLabel] {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
 		}
 	}
 
+	klog.Info("dependencyList: ", dependencyList)
+
 	// If the pod has no dependencies, return
 	if dependencyList == nil {
 		return nil
 	}
-
-	klog.Info("dependencyList: ", dependencyList)
 
 	// Check if bandwidth and network requirements can be met
 	region := networkAwareUtil.GetNodeRegion(nodeInfo.Node())
@@ -252,10 +253,10 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 }
 
 func findAppGroupCheckAppGroupRequirements(agName string, n *NodeNetworkCostFit) (*v1alpha1.AppGroup, error) {
-	klog.V(5).Infof("namespaces: %s", n.namespaces)
+	//klog.V(5).Infof("namespaces: %s", n.namespaces)
 	var err error
 	for _, namespace := range n.namespaces {
-		klog.V(5).Infof("ag.lister: %v", n.agLister)
+		//klog.V(5).Infof("ag.lister: %v", n.agLister)
 
 		// AppGroup could not be placed in several namespaces simultaneously
 		lister := n.agLister
@@ -272,10 +273,10 @@ func findAppGroupCheckAppGroupRequirements(agName string, n *NodeNetworkCostFit)
 }
 
 func findNetworkTopologyCheckAppGroupRequirements(ntName string, n *NodeNetworkCostFit) (*v1alpha1.NetworkTopology, error) {
-	klog.V(5).Infof("namespaces: %s", n.namespaces)
+	//klog.V(5).Infof("namespaces: %s", n.namespaces)
 	var err error
 	for _, namespace := range n.namespaces {
-		klog.V(5).Infof("nt.lister: %v", n.ntLister)
+		//klog.V(5).Infof("nt.lister: %v", n.ntLister)
 		// NetworkTopology could not be placed in several namespaces simultaneously
 		lister := n.ntLister
 		networkTopology, err := (*lister).NetworkTopologies(namespace).Get(ntName)

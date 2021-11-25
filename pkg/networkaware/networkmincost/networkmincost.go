@@ -134,20 +134,21 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
+	ls := pod.GetLabels()
 	for _, p := range appGroup.Spec.Pods {
-		if p.PodName == pod.GetName() {
+		if p.PodName == ls[util.DeploymentLabel] {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
 		}
 	}
 
+	klog.Info("dependencyList: ", dependencyList)
+
 	// If the pod has no dependencies, return min score
 	if dependencyList == nil {
 		return score, framework.NewStatus(framework.Success, "The pod does not have dependencies: minimum score")
 	}
-
-	klog.Info("dependencyList: ", dependencyList)
 
 	// Create map for cost / destinations. Search for costs faster...
 	var costMap = make(map[networkAwareUtil.CostKey]int64)
@@ -306,10 +307,10 @@ func GetMinMaxScores(scores framework.NodeScoreList) (int64, int64) {
 }
 
 func findAppGroupNetworkMinCost(agName string, n *NetworkMinCost) (*v1alpha1.AppGroup, error) {
-	klog.V(5).Infof("namespaces: %s", n.namespaces)
+	//klog.V(5).Infof("namespaces: %s", n.namespaces)
 	var err error
 	for _, namespace := range n.namespaces {
-		klog.V(5).Infof("ag.lister: %v", n.agLister)
+		//klog.V(5).Infof("ag.lister: %v", n.agLister)
 
 		// AppGroup could not be placed in several namespaces simultaneously
 		lister := n.agLister
@@ -326,10 +327,10 @@ func findAppGroupNetworkMinCost(agName string, n *NetworkMinCost) (*v1alpha1.App
 }
 
 func findNetworkTopologyNetworkMinCost(ntName string, n *NetworkMinCost) (*v1alpha1.NetworkTopology, error) {
-	klog.V(5).Infof("namespaces: %s", n.namespaces)
+	//klog.V(5).Infof("namespaces: %s", n.namespaces)
 	var err error
 	for _, namespace := range n.namespaces {
-		klog.V(5).Infof("nt.lister: %v", n.ntLister)
+		//klog.V(5).Infof("nt.lister: %v", n.ntLister)
 		// NetworkTopology could not be placed in several namespaces simultaneously
 		lister := n.ntLister
 		networkTopology, err := (*lister).NetworkTopologies(namespace).Get(ntName)
