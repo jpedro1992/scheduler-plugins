@@ -470,7 +470,7 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 				r2 := networkAwareUtil.GetNodeRegion(n2)
 				z2 := networkAwareUtil.GetNodeZone(n2)
 
-				klog.V(5).Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
+				klog.Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
 
 				// get cost from configmap
 				key := util.GetConfigmapCostQuery(n1.Name, n2.Name)
@@ -483,7 +483,7 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 					klog.ErrorS(err, "Error converting cost...")
 				}
 
-				klog.V(5).Infof("Cost: %v", cost)
+				klog.Infof("Cost: %v", cost)
 
 				// Update Cost in the graph
 				ctrl.nodeGraph.AddEdge(n1.Name, n2.Name, cost)
