@@ -303,18 +303,30 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 		klog.InfoS("Initial Calculation of Topology order...")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Pods, err)
 		if err != nil {
-			runtime.HandleError(err)
-			klog.ErrorS(err, "Error Calculating Topology order", "appGroup", key)
-			return err
+			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
+			var topologyList schedv1alpha1.TopologyList
+			for _, p := range agCopy.Spec.Pods {
+				topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
+					PodName: p.PodName,
+					Index:   1,
+				})
+			}
+			agCopy.Status.TopologyOrder = topologyList
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 	} else if agCopy.Status.TopologyCalculationTime.Sub(ag.CreationTimestamp.Time) > 48*time.Hour {
 		klog.InfoS("Calculate Topology order... time over 48 hours")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Pods, err)
 		if err != nil {
-			runtime.HandleError(err)
-			klog.ErrorS(err, "Error Calculating Topology order", "appGroup", key)
-			return err
+			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
+			var topologyList schedv1alpha1.TopologyList
+			for _, p := range agCopy.Spec.Pods {
+				topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
+					PodName: p.PodName,
+					Index:   1,
+				})
+			}
+			agCopy.Status.TopologyOrder = topologyList
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 	}
