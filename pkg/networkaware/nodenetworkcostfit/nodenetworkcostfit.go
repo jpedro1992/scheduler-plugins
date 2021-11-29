@@ -193,7 +193,7 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 	var numNotOK int64 = 0
 	// check if maxNetworkCost fits
 	for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
-		if podAllocated.Hostname != "" { // not yet updated by the controller
+		if podAllocated.Hostname != "" { // if already updated by the controller
 			for _, d := range dependencyList { // For each pod dependency
 				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
 					if podAllocated.Hostname == nodeInfo.Node().Name { // If the Pod hostname is the node being filtered, requirements are checked via extended resources
