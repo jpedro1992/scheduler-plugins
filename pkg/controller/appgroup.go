@@ -430,7 +430,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 func defaultTopologyOrder(agCopy *schedv1alpha1.AppGroup, podList schedv1alpha1.AppGroupPodList) (schedv1alpha1.TopologyList) {
 	var topologyList schedv1alpha1.TopologyList
 	var i int32
-	i = 0
+	i = 1
 	for _, pod := range podList {
 		topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
 			PodName: pod.PodName,
