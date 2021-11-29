@@ -168,17 +168,17 @@ metadata:
     api-approved.kubernetes.io: "To be Defined" # edited manually
     controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
-  name: appgroup.scheduling.sigs.k8s.io
+  name: appgroups.scheduling.sigs.k8s.io
 spec:
   group: scheduling.sigs.k8s.io
   names:
     kind: AppGroup
     listKind: AppGroupList
-    plural: Appgroups
+    plural: appgroups
+    singular: appgroup
     shortNames:
       - ag
       - ags
-    singular: appgroup
   scope: Namespaced
   versions:
   - name: v1alpha1
@@ -199,50 +199,58 @@ spec:
           metadata:
             type: object
           spec:
-              description: AppGroup defines the number of Pods and which Pods belong to the group.
-              properties:
-                numMembers:
-                  format: int32
-                  type: integer
-                  minimum: 1
-                  description: Number of Pods belonging to the App Group
-                topologySortingAlgorithm:
-                  type: string
-                  description: The preferred algorithm to be applied in the Topoogy order calculation (Status)
-                Pods:
-                  type: array
-                  description: The Pods belonging to the group
-                  items:
-                    type: object
-                    properties:
-                      podName:
-                        type: string
-                        description: Name of the Pod.
-                      dependencies:
-                        type: array
-                        items:
-                          description: DependenciesList establishes dependencies between pods.
-                          type: object
-                          properties:
-                            podName:
-                              description: Name of the Pod.
-                              type: string
-                            minBandwidth:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              description: Minimum bandwidth demand between both Pods.
-                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                              x-kubernetes-int-or-string: true
-                            maxNetworkCost:
-                              type: integer
-                              default: 1
-                              minimum: 0
-                              maximum: 100
-                              format: int64
-                              description: The maximum network cost between both Pods.
-                            required:
-                              - podName
+            description: AppGroup defines the number of Pods and which Pods belong to the group.
+            properties:
+              numMembers:
+                format: int32
+                type: integer
+                minimum: 1
+                description: Number of Pods belonging to the App Group
+              topologySortingAlgorithm:
+                type: string
+                description: The algorithm for TopologyOrder (Status)
+              pods:
+                description: The Pods belonging to the group array of AppGroupPod
+                items:
+                  description: AppGroupPod contains information about one Pod.
+                  properties:
+                    podName:
+                      type: string
+                      description: Name of the Pod.
+                    dependencies:
+                      items:
+                        description: DependenciesList establishes dependencies between pods.
+                        properties:
+                          podName:
+                            description: Name of the Pod.
+                            type: string
+                          minBandwidth:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: Bandwidth demand between both Pods.
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          maxNetworkCost:
+                            type: integer
+                            default: 0
+                            minimum: 0
+                            maximum: 10000
+                            format: int64
+                            description: The max Network Cost between both Pods.
+                        required:
+                        - podName
+                        type: object
+                      type: array
+                  required:
+                  - podName
+                  type: object
+                type: array
+            required:
+            - numMembers
+            - topologySortingAlgorithm
+            - pods
+            type: object
           status:
             description: Record Pod Allocations (Pod id, hostnames).
             properties:
@@ -251,18 +259,22 @@ spec:
                 format: int32
                 type: integer
                 minimum: 0
-              scheduled:
+              podsScheduled:
+                description: The Pods scheduled in the cluster (ScheduledList)
+                items:
+                  description: ScheduledInfo contains information about one Pod.
+                  properties:
+                    podName:
+                      type: string
+                      description: Name of the Pod.
+                    replicaID:
+                      type: string
+                      description: Pod ID
+                    hostname:
+                      type: string
+                      description: Hostname allocating Pod instance
+                  type: object
                 type: array
-                additionalProperties:
-                  podName:
-                    type: string
-                    description: Name of the Pod.
-                  replicaID:
-                    type: string
-                    description: Pod ID
-                  hostname:
-                    type: string
-                    description: Hostname allocating Pod instance
               scheduleStartTime:
                 description: ScheduleStartTime of the AppGroup
                 format: date-time
@@ -273,10 +285,9 @@ spec:
                 type: string
               topologyOrder:
                 description: The optimal order to schedule pods on this App Group based on a given algorithm.
-                type: array
                 items:
                   description: Pod Name and Pod Priority index
-                  type: object
+                  properties:
                     podName:
                       type: string
                       description: Name of the Pod.
@@ -286,7 +297,9 @@ spec:
                       minimum: 1
                       format: int64
                       description: Priority index for each Pod (e.g., 1, 2, ...)
-                        (1 means pod should be scheduled first in the AppGroup)
+                          (1 means pod should be scheduled first in the AppGroup)
+                  type: object
+                type: array
             type: object
         type: object
     served: true
@@ -308,16 +321,16 @@ status:
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: AppGroup
 metadata:
-  name: A1
+  name: a1
 spec:
   numMembers: 3
   topologySortingAlgorithm: KahnSort
-  Pods:
+  pods:
     - podName: P1
       dependencies:
         - podName: P2
           minBandwidth: "100Mi"
-          maxNetworkCost: 15
+          maxNetworkCost: 30
     - podName: P2
       dependencies:
         - podName: P3
@@ -375,23 +388,23 @@ type AppGroup struct {
 // AppGroupSpec represents the template of a app group.
 type AppGroupSpec struct {
 	// NumMembers defines the number of Pods belonging to the App Group
-	NumMembers int32 `json:"numMembers,omitempty"`
+	NumMembers int32 `json:"numMembers,omitempty" protobuf:"bytes,1,opt,name=numMembers"`
 
 	// The preferred Topology Sorting Algorithm
-	TopologySortingAlgorithm string `json:"topologySortingAlgorithm,omitempty"`
+	TopologySortingAlgorithm string `json:"topologySortingAlgorithm,omitempty" protobuf:"bytes,2,opt,name=topologySortingAlgorithm"`
 
 	// Pods defines the pods belonging to the group
-	Pods AppGroupPodList `json:"pods,omitempty"`
+	Pods AppGroupPodList `json:"pods,omitempty" protobuf:"bytes,3,rep,name=pods, casttype=AppGroupPodList"`
 }
 
 // AppGroupPod represents the number of Pods belonging to the App Group.
 // +protobuf=true
 type AppGroupPod struct {
 	// Name of the Pod.
-	PodName      string           `json:"name" protobuf:"bytes,1,opt,name=name"`
+	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
 
 	// Dependencies of the Pod.
-	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,opt,name=dependencies"`
+	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,rep,name=dependencies, casttype=DependenciesList"`
 }
 
 // AppGroupPodList contains an array of Pod objects.
@@ -402,15 +415,15 @@ type AppGroupPodList []AppGroupPod
 // +protobuf=true
 type DependenciesInfo struct {
 	// Name of the Pod.
-	PodName string `json:"podName" protobuf:"bytes,1,opt,name=podName"`
+	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
 
-	// MinBandwidth between pods 
+	// MinBandwidth between pods
 	// +optional
-	MinBandwidth resource.Quantity `json:"type" protobuf:"bytes,2,opt,name=minBandwidth"`
+	MinBandwidth resource.Quantity `json:"minBandwidth,omitempty" protobuf:"bytes,2,opt,name=minBandwidth"`
 
-	// Max Network Cost between pods 
+	// Max Network Cost between pods
 	// +optional
-	MaxNetworkCost int64 `json:"type" protobuf:"bytes,3,opt,name=maxNetworkCost"`
+	MaxNetworkCost int64 `json:"maxNetworkCost,omitempty" protobuf:"bytes,3,opt,name=maxNetworkCost"`
 }
 
 // DependenciesList contains an array of ResourceInfo objects.
@@ -421,30 +434,30 @@ type DependenciesList []DependenciesInfo
 type AppGroupStatus struct {
 	// The number of actively running pods.
 	// +optional
-	RunningPods int32 `json:"runningPods,omitempty"`
+	RunningPods int32 `json:"runningPods,omitempty" protobuf:"bytes,1,opt,name=runningPods"`
 
 	// PodsScheduled defines pod allocations (Pod name, Pod id, hostname).
 	// +optional
-	PodsScheduled ScheduledList `json:"podsScheduled,omitempty"`
+	PodsScheduled ScheduledList `json:"podsScheduled,omitempty" protobuf:"bytes,2,rep,name=podsScheduled,casttype=ScheduledList"`
 
 	// ScheduleStartTime of the group
-	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty"`
+	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty" protobuf:"bytes,3,opt,name=scheduleStartTime"`
 
 	// TopologyCalculationTime of the group
-	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty"`
+	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty" protobuf:"bytes,4,opt,name=topologyCalculationTime"`
 
 	// Topology order for TopSort plugin (QueueSort)
-	TopologyOrder TopologyList `json:"topologyOrder,omitempty"`
+	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,5,rep,name=topologyOrder,casttype=TopologyList"`
 }
 
 // AppGroupScheduled represents the Pod Affinities of a given Pod
 // +protobuf=true
 type ScheduledInfo struct {
 	// Pod Name
-	PodName string `json:"podName" protobuf:"bytes,1,opt,name=podName"`
+	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
 
 	// Replica ID
-	ReplicaID string `json:"replicaID" protobuf:"bytes,2,opt,name=replicaID"`
+	ReplicaID string `json:"replicaID,omitempty" protobuf:"bytes,2,opt,name=replicaID"`
 
 	// Pod Hostname
 	Hostname string `json:"hostname,omitempty" protobuf:"bytes,3,opt,name=hostname"`
@@ -457,8 +470,8 @@ type ScheduledList []ScheduledInfo
 // AppGroupTopology represents the calculated order for the given AppGroup
 // +protobuf=true
 type TopologyInfo struct {
-	PodName string `json:"podName" protobuf:"bytes,1,opt,name=podName"`
-	Index   int32  `json:"index" protobuf:"bytes,2,opt,name=index"`
+	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
+	Index   int32  `json:"index,omitempty" protobuf:"bytes,2,opt,name=index"`
 }
 
 // TopologyList contains an array of Pod orders for TopologySorting algorithm.
@@ -482,7 +495,7 @@ type AppGroupList struct {
 ### AppGroup Test based on Online Boutique
 
 In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
-It consists of 10 pods, which we named from P1 - P10. 
+It consists of 11 pods, which we named from P1 - P11. 
 
 <p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="800" class="center"/></p>
 
@@ -494,6 +507,8 @@ The topology list corresponds to:
 ```go
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
 ```
+
+change appGroup test here!
 
 <p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="900" class="center"/></p>
 
@@ -520,17 +535,17 @@ metadata:
     api-approved.kubernetes.io: "To be Defined" # edited manually
     controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
-  name: networkTopology.scheduling.sigs.k8s.io
+  name: networktopologies.scheduling.sigs.k8s.io
 spec:
   group: scheduling.sigs.k8s.io
   names:
     kind: NetworkTopology
     listKind: NetworkTopologyList
     plural: networktopologies
+    singular: networktopology
     shortNames:
       - net-topo
       - nt
-    singular: networktopology
   scope: Namespaced
   versions:
     - name: v1alpha1
@@ -551,86 +566,134 @@ spec:
             metadata:
               type: object
             spec:
-              type: object
+              description: NetworkTopology defines the zones and regions of the cluster.
               properties:
                 weights:
-                  type: array
-                  description: weightList contains an array of weightInfo objects.
+                  description: The weights of the cluster (WeightList)
                   items:
-                    name:
-                      type: string
-                      description: The name of the weights (e.g., UserDefined)
-                    regionCostList:
-                      description: Define weights for cross regions in the cluster
-                        type: object
-                        properties:
-                          origin:
-                            type: string
-                            description: Region Name (Origin)
-                          costs:
-                            type: array
-                            description: Costs contains an array of CostInfo objects.
-                            items:
-                              destination:
-                                type: string
-                                description: Region name (Destination)
-                              bandwidthCapacity:
-                                anyOf:
-                                  - type: integer
-                                  - type: string
-                                description: Bandwidth Capacity between Origin and Destination.
-                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                x-kubernetes-int-or-string: true
-                              bandwidthAllocated:
-                                anyOf:
-                                  - type: integer
-                                  - type: string
-                                description: Bandwidth allocated between Origin and Destination.
-                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                x-kubernetes-int-or-string: true
-                              networkCost:
-                                type: integer
-                                default: 1
-                                minimum: 0
-                                maximum: 100
-                                format: int64
-                                description: Cost from Origin to Destination
-                    zoneCostList:
-                      description: Define weights for zones in the cluster. Only for zones in the same region!
-                        type: object
-                        properties:
-                          origin:
-                            type: string
-                            description: Zone Name (Origin)
-                          costs:
-                            type: array
-                            description: Costs contains an array of CostInfo objects.
-                            items:
-                              destination:
-                                type: string
-                                description: Zone name (Destination)
-                              bandwidthCapacity:
-                                anyOf:
-                                  - type: integer
-                                  - type: string
-                                description: Bandwidth Capacity between Origin and Destination.
-                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                x-kubernetes-int-or-string: true
-                              bandwidthAllocated:
-                                anyOf:
-                                  - type: integer
-                                  - type: string
-                                description: Bandwidth allocated between Origin and Destination.
-                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                x-kubernetes-int-or-string: true
-                              networkCost:
-                                type: integer
-                                default: 1
-                                minimum: 0
-                                maximum: 100
-                                format: int64
-                                description: Cost from Origin to Destination
+                    description: WeightInfo contains information about weights of a given algorithm.
+                    properties:
+                      name:
+                        type: string
+                        description: Algorithm Name (e.g., UserDefined)
+                      regionCostList:
+                        description: Define weights for cross regions in the cluster (CostList)
+                        items:
+                          description: OriginInfo contains information about one region.
+                          properties:
+                            origin:
+                              type: string
+                              description: Region Name (Origin)
+                            costs:
+                              description: Costs contains an array of CostInfo objects.
+                              items:
+                                description: CostInfo contains information about one region.
+                                properties:
+                                  destination:
+                                    type: string
+                                    description: Region name (Destination)
+                                  bandwidthCapacity:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Bandwidth Capacity between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  bandwidthAllocated:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Bandwidth allocated between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  networkCost:
+                                    type: integer
+                                    default: 0
+                                    minimum: 0
+                                    format: int64
+                                    description: Cost from Origin to Destination
+                                required:
+                                - destination
+                                - networkCost
+                                type: object
+                              type: array
+                          required:
+                          - origin
+                          - costs
                           type: object
+                        type: array
+                      zoneCostList:
+                        description: Define weights for zones in the same region (CostList)
+                        items:
+                          description: OriginInfo contains information about one zone.
+                          properties:
+                            origin:
+                              type: string
+                              description: Zone Name (Origin)
+                            costs:
+                              description: Costs contains an array of CostInfo objects.
+                              items:
+                                description: CostInfo contains information about one zone.
+                                properties:
+                                  destination:
+                                    type: string
+                                    description: Zone name (Destination)
+                                  bandwidthCapacity:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    description: Bandwidth Capacity between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  bandwidthAllocated:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    description: Bandwidth allocated between Origin and Destination.
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  networkCost:
+                                    type: integer
+                                    default: 0
+                                    minimum: 0
+                                    format: int64
+                                    description: Cost from Origin to Destination
+                                required:
+                                  - destination
+                                  - networkCost
+                                type: object
+                              type: array
+                          required:
+                            - origin
+                            - costs
+                          type: object
+                        type: array
+                    required:
+                    - name
+                    - regionCostList
+                    - zoneCostList
+                    type: object
+                  type: array
+                configmapName:
+                  description: ConfigmapName to be used for cost calculation
+                  type: string
+              required:
+              - weights
+              - configmapName
+              type: object
+            status:
+              description: Record nodeCount and weight calculation time.
+              properties:
+                nodeCount:
+                  description: The number of nodes in the cluster.
+                  format: int64
+                  type: integer
+                  minimum: 0
+                weightCalculationTime:
+                  description: weightCalculationTime for calculated weights
+                  format: date-time
+                  type: string
+              type: object
           type: object
       served: true
       storage: true
@@ -652,8 +715,9 @@ apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
   name: net-topology-test
-  namespace: test-namespace
+  namespace: default
 spec:
+  configMapName: "netperfMetrics"
   weights:
     # Region label: "topology.kubernetes.io/region"
     # Zone Label:   "topology.kubernetes.io/zone"
@@ -661,35 +725,35 @@ spec:
     #             us-east-1
     # 4 Zones:    us-west-1: z1, z2
     #             us-east-1: z3, z4
-    name: "UserDefined"
-    regionCostList: # Define weights between regions
-      - origin: "us-west-1"
-        costs:
-          - destination: "us-east-1"
-            bandwidthCapacity: "10Gi"
-            networkCost: 20
-      - origin: "us-east-1"
-        costs:
-          - destination: "us-west-1"
-            bandwidthCapacity: "10Gi"
-            networkCost: 20
-    zoneCostList: # Define weighs between zones belonging to the same region!
-      - origin: "z1"
-        costs:
-          - destination: "z2"
-            bandwidthCapacity: "1Gi"
-            networkCost: 5
-      - origin: "z2"
+    - name: "UserDefined"
+      regionCostList: # Define weights between regions
+        - origin: "us-west-1"
+          costs:
+            - destination: "us-east-1"
+              bandwidthCapacity: "10Gi"
+              networkCost: 20
+        - origin: "us-east-1"
+          costs:
+            - destination: "us-west-1"
+              bandwidthCapacity: "10Gi"
+              networkCost: 20
+      zoneCostList: # Define weighs between zones belonging to the same region!
+        - origin: "z1"
+          costs:
+            - destination: "z2"
+              bandwidthCapacity: "1Gi"
+              networkCost: 5
+        - origin: "z2"
           costs:
             - destination: "z1"
               bandwidthCapacity: "1Gi"
               networkCost: 5
-      - origin: "z3"
+        - origin: "z3"
           costs:
             - destination: "z4"
               bandwidthCapacity: "1Gi"
               networkCost: 10
-      - origin: "z4"
+        - origin: "z4"
           costs:
             - destination: "z3"
               bandwidthCapacity: "1Gi"
@@ -711,12 +775,32 @@ type NetworkTopology struct {
 	// NetworkTopologySpec defines the Min and Max for Quota.
 	// +optional
 	Spec NetworkTopologySpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+
+	// NetworkTopologyStatus defines the observed use.
+	// +optional
+	Status NetworkTopologyStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 // NetworkTopologySpec represents the template of a NetworkTopology.
 type NetworkTopologySpec struct {
 	// The manual defined weights of the cluster
-	Weights WeightList `json:"weights,omitempty"`
+	Weights WeightList `json:"weights,omitempty" protobuf:"bytes,1,rep,name=weights,casttype=WeightList"`
+
+	// ConfigmapName to be used for cost calculation
+	ConfigmapName string `json:"configmapName,omitempty" protobuf:"bytes,2,opt,name=configmapName"`
+}
+
+// NetworkTopologyStatus represents the current state of a Network Topology.
+type NetworkTopologyStatus struct {
+	// The total number of nodes in the cluster
+	NodeCount int64 `json:"nodeCount,omitempty" protobuf:"bytes,1,opt,name=nodeCount"`
+
+	// The calculation time for the weights in the network topology CRD
+	WeightCalculationTime metav1.Time `json:"weightCalculationTime,omitempty" protobuf:"bytes,2,opt,name=weightCalculationTime"`
+
+	// The calculated weights in the topology.
+	// +optional
+	// Weights WeightList `json:"weightList,omitempty"`
 }
 
 // WeightList contains an array of WeightInfo objects.
@@ -730,42 +814,42 @@ type CostList []OriginInfo
 // WeightInfo contains information about all network costs for a given algorithm.
 // +protobuf=true
 type WeightInfo struct {
-	// The name of the weightInfo (e.g., UserDefined)
-	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
+	// Algorithm Name for network cost calculation (e.g., userDefined)
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 
 	// Costs between regions
-	RegionCostList CostList `json:"regionCostList" protobuf:"bytes,2,opt,name=regionCostList"`
+	RegionCostList CostList `json:"regionCostList,omitempty" protobuf:"bytes,2,rep,name=regionCostList,casttype=CostList"`
 
 	// Costs between zones
-	ZoneCostList CostList `json:"zoneCostList" protobuf:"bytes,3,opt,name=zoneCostList"`
+	ZoneCostList CostList `json:"zoneCostList,omitempty" protobuf:"bytes,3,rep,name=zoneCostList,casttype=CostList"`
 }
 
 // OriginInfo contains information about network costs for a particular Origin.
 // +protobuf=true
 type OriginInfo struct {
-	// The name of the origin (e.g., Region Name, Zone Name).
-	Origin string `json:"origin" protobuf:"bytes,1,opt,name=origin"`
+	// Name of the origin (e.g., Region Name, Zone Name).
+	Origin string `json:"origin,omitempty" protobuf:"bytes,1,opt,name=origin"`
 
 	// Costs for the particular origin.
-	Costs []CostInfo `json:"destination" protobuf:"bytes,2,opt,name=destination"`
+	Costs []CostInfo `json:"costs,omitempty" protobuf:"bytes,2,rep,name=costs,casttype=CostInfo"`
 }
 
 // CostInfo contains information about networkCosts.
 // +protobuf=true
 type CostInfo struct {
 	// Name of the destination (e.g., Region Name, Zone Name).
-	Destination string `json:"destination" protobuf:"bytes,1,opt,name=destination"`
+	Destination string `json:"destination,omitempty" protobuf:"bytes,1,opt,name=destination"`
 
-	// Bandwidth capacity between origin and destination. 
+	// Bandwidth capacity between origin and destination.
 	// +optional
-	BandwidthCapacity resource.Quantity `json:"bandwidthCapacity" protobuf:"bytes,2,opt,name=bandwidthCapacity"`
+	BandwidthCapacity resource.Quantity `json:"bandwidthCapacity,omitempty" protobuf:"bytes,2,opt,name=bandwidthCapacity"`
 
-	// Bandwidth allocatable between origin and destination.
+	// Bandwidth allocated between origin and destination.
 	// +optional
-	BandwidthAllocatable resource.Quantity `json:"bandwidthAllocatable" protobuf:"bytes,3,opt,name=bandwidthAllocatable"`
+	BandwidthAllocated resource.Quantity `json:"bandwidthAllocated,omitempty" protobuf:"bytes,3,opt,name=bandwidthAllocated"`
 
-	// Network Cost between origin and destination
-	NetworkCost int64 `json:"networkCost" protobuf:"bytes,4,opt,name=networkCost"`
+	// Network Cost between origin and destination (e.g., Dijkstra shortest path, etc)
+	NetworkCost int64 `json:"networkCost,omitempty" protobuf:"bytes,4,opt,name=networkCost"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -1039,18 +1123,20 @@ Let's consider the following AppGroup CRD for the appGroup `A1` containing three
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: AppGroup
 metadata:
-  name: A1
+  name: a1
 spec:
   numMembers: 3
   topologySortingAlgorithm: KahnSort
-  Pods:
+  pods:
     - podName: P1
       dependencies:
         - podName: P2
+          minBandwidth: "100Mi"
           maxNetworkCost: 15
     - podName: P2
       dependencies:
         - podName: P3
+          minBandwidth: "250Mi"
           maxNetworkCost: 20
     - podName: P3
 ```
@@ -1080,54 +1166,52 @@ The NetworkTopology CRD is the following:
 
 ```yaml
 # Example Network CRD 
+# Example Network CRD 
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
   name: net-topology-test
-  namespace: test-namespace
+  namespace: default
 spec:
+  configMapName: "netperfMetrics"
   weights:
     # Region label: "topology.kubernetes.io/region"
     # Zone Label:   "topology.kubernetes.io/zone"
     # 2 Regions:  us-west-1
     #             us-east-1
-    # 4 Zones:    us-west-1: Z1, Z2
-    #             us-east-1: Z3, Z4
-    # 8 nodes:    z1: N1, N2
-    #             z2: N3, N4
-    #             z3: N5, N6
-    #             z4: N7, N8 
-    name: "UserDefined"
-    regionCostList: # Define weights between regions
-      - origin: "us-west-1"
-        costs:
-          - destination: "us-east-1"
-            bandwidthCapacity: "10Gi"
-            networkCost: 20
-      - origin: "us-east-1"
-        costs:
-          - destination: "us-west-1"
-            bandwidthCapacity: "10Gi"
-            networkCost: 20
-    zoneCostList: # Define weighs between zones belonging to the same region!
-      - origin: "Z1"
-        costs:
-          - destination: "Z2"
-            bandwidthCapacity: "1Gi"
-            networkCost: 5
-      - origin: "Z2"
+    # 4 Zones:    us-west-1: z1, z2
+    #             us-east-1: z3, z4
+    - name: "UserDefined"
+      regionCostList: # Define weights between regions
+        - origin: "us-west-1"
           costs:
-            - destination: "Z1"
+            - destination: "us-east-1"
+              bandwidthCapacity: "10Gi"
+              networkCost: 20
+        - origin: "us-east-1"
+          costs:
+            - destination: "us-west-1"
+              bandwidthCapacity: "10Gi"
+              networkCost: 20
+      zoneCostList: # Define weighs between zones belonging to the same region!
+        - origin: "z1"
+          costs:
+            - destination: "z2"
               bandwidthCapacity: "1Gi"
               networkCost: 5
-      - origin: "Z3"
+        - origin: "z2"
           costs:
-            - destination: "Z4"
+            - destination: "z1"
+              bandwidthCapacity: "1Gi"
+              networkCost: 5
+        - origin: "z3"
+          costs:
+            - destination: "z4"
               bandwidthCapacity: "1Gi"
               networkCost: 10
-      - origin: "z4"
+        - origin: "z4"
           costs:
-            - destination: "Z3"
+            - destination: "z3"
               bandwidthCapacity: "1Gi"
               networkCost: 10
 ```
