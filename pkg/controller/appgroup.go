@@ -304,29 +304,16 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Pods, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
-			var topologyList schedv1alpha1.TopologyList
-			for _, p := range agCopy.Spec.Pods {
-				topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
-					PodName: p.PodName,
-					Index:   1,
-				})
-			}
-			agCopy.Status.TopologyOrder = topologyList
+			agCopy.Status.TopologyOrder = defaultTopologyOrder(agCopy, agCopy.Spec.Pods)
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
+
 	} else if agCopy.Status.TopologyCalculationTime.Sub(ag.CreationTimestamp.Time) > 48*time.Hour {
 		klog.InfoS("Calculate Topology order... time over 48 hours")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Pods, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
-			var topologyList schedv1alpha1.TopologyList
-			for _, p := range agCopy.Spec.Pods {
-				topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
-					PodName: p.PodName,
-					Index:   1,
-				})
-			}
-			agCopy.Status.TopologyOrder = topologyList
+			agCopy.Status.TopologyOrder = defaultTopologyOrder(agCopy, agCopy.Spec.Pods)
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 	}
@@ -437,4 +424,25 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 
 	klog.V(5).Info("topologyList (After): ", topologyList)
 	return topologyList, nil
+}
+
+// Calculate the correct sequence order for deployment to be used by the TopologicalSort Plugin
+func defaultTopologyOrder(agCopy *schedv1alpha1.AppGroup, podList schedv1alpha1.AppGroupPodList) (schedv1alpha1.TopologyList) {
+	var topologyList schedv1alpha1.TopologyList
+	var i int32
+	i = 0
+	for _, pod := range podList {
+		topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
+			PodName: pod.PodName,
+			Index:   i,
+		})
+		i+=1
+	}
+
+	// Sort TopologyList by Pod Name
+	klog.V(5).Infof("Sort Topology List by pod name... ")
+	sort.Sort(util.ByPodName(topologyList))
+
+	klog.V(5).Info("topologyList (After): ", topologyList)
+	return topologyList
 }
