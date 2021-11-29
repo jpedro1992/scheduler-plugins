@@ -193,30 +193,44 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 	var numNotOK int64 = 0
 	// check if maxNetworkCost fits
 	for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
-		for _, d := range dependencyList { // For each pod dependency
-			if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
-				if podAllocated.Hostname == nodeInfo.Node().Name { // If the Pod hostname is the node being filtered, requirements are checked via extended resources
-					numOK += 1
-				} else { // If Nodes are not the same
-					// Get NodeInfo from pod Hostname
-					podHostname, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
-					if err != nil {
-						return framework.NewStatus(framework.Error, "pod hostname not found")
-					}
+		if podAllocated.Hostname != "" { // not yet updated by the controller
+			for _, d := range dependencyList { // For each pod dependency
+				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
+					if podAllocated.Hostname == nodeInfo.Node().Name { // If the Pod hostname is the node being filtered, requirements are checked via extended resources
+						numOK += 1
+					} else { // If Nodes are not the same
+						// Get NodeInfo from pod Hostname
+						podHostname, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
+						if err != nil {
+							return framework.NewStatus(framework.Error, "pod hostname not found")
+						}
 
-					// Get zone and region from Pod Hostname
-					regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname.Node())
-					zonePodHostname := networkAwareUtil.GetNodeZone(podHostname.Node())
+						// Get zone and region from Pod Hostname
+						regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname.Node())
+						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname.Node())
 
-					if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
-						numNotOK += 1
-					} else if region == regionPodHostname { // If Nodes belong to the same region
-						if zone == zonePodHostname { // If Nodes belong to the same zone
-							numOK += 1
-						} else { // belong to a different zone, check maxNetworkCost
+						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
+							numNotOK += 1
+						} else if region == regionPodHostname { // If Nodes belong to the same region
+							if zone == zonePodHostname { // If Nodes belong to the same zone
+								numOK += 1
+							} else { // belong to a different zone, check maxNetworkCost
+								cost, costOK := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
+									Origin:      zone, // Time Complexity: O(1)
+									Destination: zonePodHostname,
+								}]
+								if costOK {
+									if cost <= d.MaxNetworkCost {
+										numOK += 1
+									} else {
+										numNotOK += 1
+									}
+								}
+							}
+						} else { // belong to a different region
 							cost, costOK := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
-								Origin:      zone, // Time Complexity: O(1)
-								Destination: zonePodHostname,
+								Origin:      region, // Time Complexity: O(1)
+								Destination: regionPodHostname,
 							}]
 							if costOK {
 								if cost <= d.MaxNetworkCost {
@@ -224,18 +238,6 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 								} else {
 									numNotOK += 1
 								}
-							}
-						}
-					} else { // belong to a different region
-						cost, costOK := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
-							Origin:      region, // Time Complexity: O(1)
-							Destination: regionPodHostname,
-						}]
-						if costOK {
-							if cost <= d.MaxNetworkCost {
-								numOK += 1
-							} else {
-								numNotOK += 1
 							}
 						}
 					}

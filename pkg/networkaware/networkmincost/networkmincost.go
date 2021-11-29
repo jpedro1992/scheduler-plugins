@@ -210,45 +210,47 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	var cost int64 = 0
 	// calculate accumulated shortest path
 	for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
-		for _, d := range dependencyList { // For each pod dependency
-			if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
-				if podAllocated.Hostname == nodeName { // If the Pod hostname is the node being scored
-					cost += SameHostname
-				} else { // If Nodes are not the same
-					// Get NodeInfo from pod Hostname
-					podHostname, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
-					if err != nil {
-						return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pod hostname %q from Snapshot: %v", podHostname, err))
-					}
-					// Get zone and region from Pod Hostname
-					regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname.Node())
-					zonePodHostname := networkAwareUtil.GetNodeZone(podHostname.Node())
+		if podAllocated.Hostname != "" { // not yet updated by the controller
+			for _, d := range dependencyList { // For each pod dependency
+				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
+					if podAllocated.Hostname == nodeName { // If the Pod hostname is the node being scored
+						cost += SameHostname
+					} else { // If Nodes are not the same
+						// Get NodeInfo from pod Hostname
+						podHostname, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
+						if err != nil {
+							return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pod hostname %q from Snapshot: %v", podHostname, err))
+						}
+						// Get zone and region from Pod Hostname
+						regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname.Node())
+						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname.Node())
 
-					if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
-						cost += MaxCost
-					} else if region == regionPodHostname { // If Nodes belong to the same region
-						if zone == zonePodHostname { // If Nodes belong to the same zone
-							cost += SameZone
-						} else { // belong to a different zone
-							value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
-								Origin:      zone, // Time Complexity: O(1)
-								Destination: zonePodHostname,
+						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
+							cost += MaxCost
+						} else if region == regionPodHostname { // If Nodes belong to the same region
+							if zone == zonePodHostname { // If Nodes belong to the same zone
+								cost += SameZone
+							} else { // belong to a different zone
+								value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
+									Origin:      zone, // Time Complexity: O(1)
+									Destination: zonePodHostname,
+								}]
+								if ok {
+									cost += value // Add the cost to the sum
+								} else {
+									cost += MaxCost
+								}
+							}
+						} else { // belong to a different region
+							value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: region, destination: pod regionHostname)
+								Origin:      region, // Time Complexity: O(1)
+								Destination: regionPodHostname,
 							}]
 							if ok {
 								cost += value // Add the cost to the sum
 							} else {
 								cost += MaxCost
 							}
-						}
-					} else { // belong to a different region
-						value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: region, destination: pod regionHostname)
-							Origin:      region, // Time Complexity: O(1)
-							Destination: regionPodHostname,
-						}]
-						if ok {
-							cost += value // Add the cost to the sum
-						} else {
-							cost += MaxCost
 						}
 					}
 				}
