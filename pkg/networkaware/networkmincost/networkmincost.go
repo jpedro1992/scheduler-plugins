@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"math"
@@ -43,6 +45,7 @@ const (
 // NetworkMinCost : scheduler plugin
 type NetworkMinCost struct {
 	handle      framework.Handle
+	podLister   corelisters.PodLister
 	agLister    *schedLister.AppGroupLister
 	ntLister    *schedLister.NetworkTopologyLister
 	namespaces  []string
@@ -91,6 +94,7 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 
 	pl := &NetworkMinCost{
 		handle:      handle,
+		podLister:   handle.SharedInformerFactory().Core().V1().Pods().Lister(),
 		agLister:    agLister,
 		ntLister:    ntLister,
 		namespaces:  args.Namespaces,
@@ -127,11 +131,6 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	klog.Info("AppGroup CRD: ", appGroup.Name)
 	klog.Info("Network Topology CRD: ", networkTopology.Name)
 
-	// Check if pods already available
-	if appGroup.Status.PodsScheduled == nil {
-		return score, framework.NewStatus(framework.Success, "No Pods yet allocated for the AppGroup: min score")
-	}
-
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
 	ls := pod.GetLabels()
@@ -148,6 +147,38 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	// If the pod has no dependencies, return min score
 	if dependencyList == nil {
 		return score, framework.NewStatus(framework.Success, "The pod does not have dependencies: minimum score")
+	}
+
+	// Get pods from lister
+	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
+	pods, err := pl.podLister.List(selector)
+	if err != nil {
+		return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pods from lister: %v", err))
+	}
+
+	if pods == nil{
+		return score, framework.NewStatus(framework.Success, "No pods yet allocated: minimum score")
+	}
+
+	// Pods already scheduled: Deployment name, replicaID, hostname
+	scheduledList := v1alpha1.ScheduledList{}
+
+	for _, p := range pods {
+		if networkAwareUtil.AssignedPod(p) {
+			scheduledInfo := v1alpha1.ScheduledInfo{
+				PodName:   util.GetDeploymentName(p),
+				ReplicaID: string(p.GetUID()),
+				Hostname:  p.Spec.NodeName,
+			}
+			scheduledList = append(scheduledList, scheduledInfo)
+		}
+	}
+
+	klog.Info("scheduledList: ", scheduledList)
+
+	// Check if pods already available
+	if scheduledList == nil{ //appGroup.Status.PodsScheduled == nil {
+		return score, framework.NewStatus(framework.Success, "No Pods yet allocated for the AppGroup: min score")
 	}
 
 	// Create map for cost / destinations. Search for costs faster...
@@ -209,7 +240,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 
 	var cost int64 = 0
 	// calculate accumulated shortest path
-	for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
+	for _, podAllocated := range scheduledList { // For each pod already allocated
 		if podAllocated.Hostname != "" { // if already updated by the controller
 			for _, d := range dependencyList { // For each pod dependency
 				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency

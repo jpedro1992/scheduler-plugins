@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	pluginConfig "sigs.k8s.io/scheduler-plugins/pkg/apis/config"
@@ -39,6 +41,7 @@ const (
 // NodeMaxNetworkCostFit : scheduler plugin
 type NodeNetworkCostFit struct {
 	handle      framework.Handle
+	podLister   corelisters.PodLister
 	agLister    *schedLister.AppGroupLister
 	ntLister    *schedLister.NetworkTopologyLister
 	namespaces  []string
@@ -82,6 +85,7 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 
 	pl := &NodeNetworkCostFit{
 		handle:      handle,
+		podLister:   handle.SharedInformerFactory().Core().V1().Pods().Lister(),
 		agLister:    agLister,
 		ntLister:    ntLister,
 		namespaces:  args.Namespaces,
@@ -120,11 +124,6 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 	klog.Info("AppGroup CRD: ", appGroup.Name)
 	klog.Info("Network Topology CRD: ", networkTopology.Name)
 
-	// Check if pods already available, otherwise return
-	if appGroup.Status.PodsScheduled == nil {
-		return nil
-	}
-
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
 	ls := pod.GetLabels()
@@ -140,6 +139,41 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 
 	// If the pod has no dependencies, return
 	if dependencyList == nil {
+		return nil
+	}
+
+	// Get pods from lister
+	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
+	pods, err := pl.podLister.List(selector)
+	if err != nil {
+		klog.ErrorS(err, "Error while returning pods from appGroup, return")
+		return nil
+	}
+
+	if pods == nil{
+		klog.ErrorS(err, "No pods yet allocated, return")
+		return nil
+	}
+
+	// Pods already scheduled: Deployment name, replicaID, hostname
+	scheduledList := v1alpha1.ScheduledList{}
+
+	for _, p := range pods {
+		if networkAwareUtil.AssignedPod(p) {
+			scheduledInfo := v1alpha1.ScheduledInfo{
+				PodName:   util.GetDeploymentName(p),
+				ReplicaID: string(p.GetUID()),
+				Hostname:  p.Spec.NodeName,
+			}
+			scheduledList = append(scheduledList, scheduledInfo)
+		}
+	}
+
+	klog.Info("scheduledList: ", scheduledList)
+
+	// Check if pods already available
+	if scheduledList == nil{
+		klog.ErrorS(err, "Scheduled list is empty, return")
 		return nil
 	}
 
@@ -192,7 +226,7 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 	var numOK int64 = 0
 	var numNotOK int64 = 0
 	// check if maxNetworkCost fits
-	for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
+	for _, podAllocated := range scheduledList { // For each pod already allocated
 		if podAllocated.Hostname != "" { // if already updated by the controller
 			for _, d := range dependencyList { // For each pod dependency
 				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency

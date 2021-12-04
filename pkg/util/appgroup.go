@@ -73,6 +73,11 @@ func GetAppGroupFullName(pod *v1.Pod) string {
 	return fmt.Sprintf("%v/%v", pod.Namespace, agName)
 }
 
+// GetDeploymentName get app group from pod annotations
+func GetDeploymentName(pod *v1.Pod) string {
+	return pod.Labels[DeploymentLabel]
+}
+
 // Implementation of Topology Sorting algorithms based on https://github.com/otaviokr/topological-sort
 // KahnSort receives a tree (AppGroup Service Topology) and returns an array with the pods sorted.
 func KahnSort(tree map[string][]string) ([]string, error) {
