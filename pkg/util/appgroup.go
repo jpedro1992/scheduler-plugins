@@ -37,6 +37,9 @@ AppGroupReverseKahn   = "ReverseKahn"
 AppGroupReverseTarjan = "ReverseTarjan"
 AppGroupAlternateKahn   = "AlternateKahn"
 AppGroupAlternateTarjan = "AlternateTarjan"
+
+NodeExternalIP  NodeAddressType = "ExternalIP"
+NodeInternalIP  NodeAddressType = "InternalIP"
 )
 
 type NodeAddressType string
@@ -59,11 +62,6 @@ func (s ByPodName) Less(i, j int) bool {
 // GetAppGroupLabel get app group from pod annotations
 func GetAppGroupLabel(pod *v1.Pod) string {
 	return pod.Labels[AppGroupLabel]
-}
-
-// GetDeploymentName get app group from pod annotations
-func GetDeploymentName(pod *v1.Pod) string {
-	return pod.Labels[DeploymentLabel]
 }
 
 // GetAppGroupFullName get namespaced group name from pod annotations

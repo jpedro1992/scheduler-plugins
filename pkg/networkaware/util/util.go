@@ -147,12 +147,6 @@ func FindOriginCosts(costList []schedulingv1.OriginInfo, origin string) []schedu
 	return []schedulingv1.CostInfo{}
 }
 
-// assignedPod selects pods that are assigned (scheduled and running).
-func AssignedPod(pod *v1.Pod) bool {
-	return len(pod.Spec.NodeName) != 0
-}
-
-
 /*
 func FindLowerBoundWeightList(weightList []schedulingv1.OriginInfo, nodeName string, low int, high int) int {
 	if low > high {
