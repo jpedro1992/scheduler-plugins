@@ -1,0 +1,114 @@
+apiVersion: scheduling.sigs.k8s.io/v1alpha1
+kind: AppGroup
+metadata:
+  name: online-boutique
+spec:
+  numMembers: 11
+  topologySortingAlgorithm: AlternateKahn
+  pods:
+    - podName: frontend
+      dependencies:
+        - podName: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: productcatalogservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: currencyservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: shippingservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: adservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: cartservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: redis-cart
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: productcatalogservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: recommendationservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: currencyservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: paymentservice
+      dependencies:
+        - podName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: shippingservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: emailservice
+      dependencies:
+        - podName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: checkoutservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: productcatalogservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: currencyservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: paymentservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: shippingservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: emailservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: recommendationservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - podName: productcatalogservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: adservice
+      dependencies:
+        - podName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - podName: redis-cart
+      dependencies:
+        - podName: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80

@@ -94,6 +94,8 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 		},
 	}
 
+	podNames := []string{"P1", "P2", "P3"}
+
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
@@ -130,21 +132,32 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               string
-		agName             string
-		appGroup           *v1alpha1.AppGroup
-		networkTopology    *v1alpha1.NetworkTopology
-		nodes              []*v1.Node
-		pod                *v1.Pod
-		want               *framework.Status
-		wantedScoresBefore framework.NodeScoreList
-		wantedScoresAfter  framework.NodeScoreList
-		nodeToScore        *v1.Node
+		name               	string
+		agName             	string
+		dependenciesNum 	int32
+		podNames           	[]string
+		pods                []*v1.Pod
+		appGroup           	*v1alpha1.AppGroup
+		networkTopology    	*v1alpha1.NetworkTopology
+		nodes              	[]*v1.Node
+		pod               	 *v1.Pod
+		want               	*framework.Status
+		wantedScoresBefore 	framework.NodeScoreList
+		wantedScoresAfter  	framework.NodeScoreList
+		nodeToScore        	*v1.Node
 	}{
 		{
 			name:            "AppGroup: basic, P1 to allocate, 8 nodes to score",
 			agName:          "basic",
 			appGroup:        appGroup,
+			dependenciesNum: 5,
+			podNames:		 podNames,
+
+			pods: []*v1.Pod{
+				makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
+				makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
+				makePodAllocated("P3", "n-1", 0, "basic", nil, nil),
+			},
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "basic", nil, nil),
 			nodes:           nodes,
@@ -176,6 +189,11 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P2", 0, "basic", nil, nil),
+			pods: []*v1.Pod{
+				makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
+				makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
+				makePodAllocated("P3", "n-1", 0, "basic", nil, nil),
+			},
 			nodes:           nodes,
 			want:            nil,
 			wantedScoresBefore: framework.NodeScoreList{
@@ -204,6 +222,11 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			agName:          "basic",
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
+			pods: []*v1.Pod{
+				makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
+				makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
+				makePodAllocated("P3", "n-1", 0, "basic", nil, nil),
+			},
 			pod:             makePod("P3", 0, "basic", nil, nil),
 			nodes:           nodes,
 			want:            nil,
@@ -244,9 +267,26 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			ntLister := fakeNTInformer.Lister()
 
 			// create plugin
+			//var kubeClient = fake.NewSimpleClientset()
+			//kubeClient = fake.NewSimpleClientset(nodes[0], nodes[1], nodes[2], nodes[3], nodes[4], nodes[5], nodes[6], nodes[7])
+
+			ctx := context.Background()
 			cs := testClientSet.NewSimpleClientset()
+
 			informerFactory := informers.NewSharedInformerFactory(cs, 0)
-			snapshot := newTestSharedLister(nil, nodes)
+
+			for _, p := range tt.pods{
+				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
+				if err != nil {
+					t.Fatalf("Failed to create Pod %q: %v", p.Name, err)
+				}
+				t.Logf("Pod %v created  \n", p.Name)
+			}
+
+			snapshot := newTestSharedLister(nil, tt.nodes)
+
+			podInformer := informerFactory.Core().V1().Pods()
+			podLister := podInformer.Lister()
 
 			registeredPlugins := []st.RegisterPluginFunc{
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
@@ -259,6 +299,7 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			pl := &NetworkMinCost{
 				handle:      fh,
 				agLister:    &agLister,
+				podLister:   podLister,
 				ntLister:    &ntLister,
 				namespaces:  []string{"default"},
 				weightsName: "UserDefined",
@@ -268,13 +309,12 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			t.Logf("Test: %v \n", tt.name)
 			var scoreList framework.NodeScoreList
 
-			t.Logf("PodsScheduled: %v", tt.appGroup.Status.PodsScheduled)
+				//t.Logf("PodsScheduled: %v", tt.appGroup.Status.PodsScheduled)
 			for _, n := range nodes {
 				score, gotStatus := pl.Score(
 					context.Background(),
 					framework.NewCycleState(),
 					tt.pod, n.Name)
-
 				t.Logf("Pod: %v; Node: %v; score: %v; status: %v; message: %v \n", tt.pod.Name, n.Name, score, gotStatus.Code().String(), gotStatus.Message())
 
 				nodeScore := framework.NodeScore{
@@ -301,9 +341,9 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			if !reflect.DeepEqual(tt.wantedScoresAfter, scoreList) {
 				t.Errorf("[Normalize] status does not match: %v, want: %v\n", tt.wantedScoresAfter, scoreList)
 			}
-
 		})
 	}
+
 }
 
 func BenchmarkNetworkMinCostPlugin(b *testing.B) {
@@ -732,6 +772,32 @@ func makePod(name string, priority int32, appGroup string, requests, limits v1.R
 			Labels: label,
 		},
 		Spec: v1.PodSpec{
+			Priority: &priority,
+			Containers: []v1.Container{
+				{
+					Name: name,
+					Resources: v1.ResourceRequirements{
+						Requests: requests,
+						Limits:   limits,
+					},
+				},
+			},
+		},
+	}
+}
+
+func makePodAllocated(name string, hostname string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
+	label := make(map[string]string)
+	label[util.AppGroupLabel] = appGroup
+	label[util.DeploymentLabel] = name
+
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: label,
+		},
+		Spec: v1.PodSpec{
+			NodeName: hostname,
 			Priority: &priority,
 			Containers: []v1.Container{
 				{
