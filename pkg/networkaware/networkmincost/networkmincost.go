@@ -128,8 +128,8 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 		return score, framework.NewStatus(framework.Error, "Error while returning NetworkTopology: min score")
 	}
 
-	klog.Info("AppGroup CRD: ", appGroup.Name)
-	klog.Info("Network Topology CRD: ", networkTopology.Name)
+	klog.V(6).Info("AppGroup CRD: ", appGroup.Name)
+	klog.V(6).Info("Network Topology CRD: ", networkTopology.Name)
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
@@ -142,7 +142,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 		}
 	}
 
-	klog.Info("dependencyList: ", dependencyList)
+	klog.V(6).Info("dependencyList: ", dependencyList)
 
 	// If the pod has no dependencies, return min score
 	if dependencyList == nil {
@@ -174,7 +174,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 		}
 	}
 
-	klog.Info("scheduledList: ", scheduledList)
+	klog.V(6).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
 	if scheduledList == nil{ //appGroup.Status.PodsScheduled == nil {
@@ -194,8 +194,8 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	region := networkAwareUtil.GetNodeRegion(nodeInfo.Node())
 	zone := networkAwareUtil.GetNodeZone(nodeInfo.Node())
 
-	klog.Info("Node Region: ", region)
-	klog.Info("Node Zone: ", zone)
+	klog.V(6).Info("Node Region: ", region)
+	klog.V(6).Info("Node Zone: ", zone)
 
 	if pl.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
@@ -292,7 +292,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
 	// Return Accumulated Cost as score
 	score = cost
 
-	klog.Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
+	klog.V(6).Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
 	return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 }
 
@@ -319,7 +319,7 @@ func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.C
 			scores[i].Score = framework.MaxNodeScore - int64(normCost)
 		}
 	}
-	klog.Infof("scores: %s", scores)
+	klog.V(5).Infof("scores: %s", scores)
 	return nil
 }
 

@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	testClientSet "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/queuesort"
@@ -38,8 +39,6 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 	"testing"
 	"time"
-
-	"k8s.io/client-go/util/workqueue"
 )
 
 var _ framework.SharedLister = &testSharedLister{}
@@ -218,7 +217,7 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			},
 		},
 		{
-			name:            "AppGroup: basic, P3 to allocate (no dependency!), 8 nodes to score",
+			name:            "AppGroup: basic, P3 to allocate, no dependency, 8 nodes to score",
 			agName:          "basic",
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
@@ -275,6 +274,12 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 
 			informerFactory := informers.NewSharedInformerFactory(cs, 0)
 
+			snapshot := newTestSharedLister(nil, tt.nodes)
+
+			podInformer := informerFactory.Core().V1().Pods()
+			podLister := podInformer.Lister()
+			informerFactory.Start(ctx.Done())
+
 			for _, p := range tt.pods{
 				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
 				if err != nil {
@@ -282,11 +287,6 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 				}
 				t.Logf("Pod %v created  \n", p.Name)
 			}
-
-			snapshot := newTestSharedLister(nil, tt.nodes)
-
-			podInformer := informerFactory.Core().V1().Pods()
-			podLister := podInformer.Lister()
 
 			registeredPlugins := []st.RegisterPluginFunc{
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
@@ -306,14 +306,19 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 				ntName:      "nt-test",
 			}
 
+			// Without sleep sometimes the pods are not created in the api in time
+			time.Sleep(1 * time.Second)
+
 			t.Logf("Test: %v \n", tt.name)
 			var scoreList framework.NodeScoreList
+
+			state := framework.NewCycleState()
 
 				//t.Logf("PodsScheduled: %v", tt.appGroup.Status.PodsScheduled)
 			for _, n := range nodes {
 				score, gotStatus := pl.Score(
-					context.Background(),
-					framework.NewCycleState(),
+					ctx,
+					state,
 					tt.pod, n.Name)
 				t.Logf("Pod: %v; Node: %v; score: %v; status: %v; message: %v \n", tt.pod.Name, n.Name, score, gotStatus.Code().String(), gotStatus.Message())
 
@@ -327,7 +332,7 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			//t.Logf("Score List (Before normalization): %v", scoreList)
 
 			if !reflect.DeepEqual(tt.wantedScoresBefore, scoreList) {
-				t.Errorf("[Score] status does not match: %v, want: %v\n", tt.wantedScoresBefore, scoreList)
+				t.Errorf("[Score] status does not match: %v, want: %v\n", scoreList, tt.wantedScoresBefore)
 			}
 
 			pl.NormalizeScore(
@@ -339,7 +344,7 @@ func TestNetworkMinCostPlugin(t *testing.T) {
 			//t.Logf("Score List (After Normalization): %v", scoreList)
 
 			if !reflect.DeepEqual(tt.wantedScoresAfter, scoreList) {
-				t.Errorf("[Normalize] status does not match: %v, want: %v\n", tt.wantedScoresAfter, scoreList)
+				t.Errorf("[Normalize] status does not match: %v, want: %v\n", scoreList, tt.wantedScoresAfter)
 			}
 		})
 	}
@@ -401,6 +406,19 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 	podNames := []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"}
 	regionNames := []string{"R1", "R2", "R3", "R4", "R5"}
 	zoneNames := []string{"Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10"}
+
+	pods:= []*v1.Pod{
+		makePodAllocated("P1", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P2", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P3", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P4", "n-9", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P5", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P6", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P7", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P8", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P9", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P10", "n-2", 0, "OnlineBoutique", nil, nil),
+	}
 
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
@@ -506,11 +524,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 		appGroup        *v1alpha1.AppGroup
 		networkTopology *v1alpha1.NetworkTopology
 		pod             *v1.Pod
+		pods            []*v1.Pod
 	}{
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 10 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 10 nodes, 1 pod to allocate",
 			nodesNum:        10,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -518,11 +537,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 100 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 100 nodes, 1 pod to allocate",
 			nodesNum:        100,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -530,11 +550,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 500 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 500 nodes, 1 pod to allocate",
 			nodesNum:        500,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -542,11 +563,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 1000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 1000 nodes, 1 pod to allocate",
 			nodesNum:        1000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -554,11 +576,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 2000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 2000 nodes, 1 pod to allocate",
 			nodesNum:        2000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -566,11 +589,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 3000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 3000 nodes, 1 pod to allocate",
 			nodesNum:        3000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -578,11 +602,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 5000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 5000 nodes, 1 pod to allocate",
 			nodesNum:        5000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -590,11 +615,12 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 10000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 10000 nodes, 1 pod to allocate",
 			nodesNum:        10000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -602,6 +628,7 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 	}
 
@@ -617,7 +644,7 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 
 			// Create dependencies
 			tt.appGroup.Status.RunningPods = tt.dependenciesNum
-			tt.appGroup.Status.PodsScheduled = createDependencies(int64(tt.dependenciesNum), tt.podNames, nodes)
+			//tt.appGroup.Status.PodsScheduled = createDependencies(int64(tt.dependenciesNum), tt.podNames, nodes)
 
 			// add CRDs
 			agLister := fakeAgInformer.Lister()
@@ -627,9 +654,24 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			_ = fakeNTInformer.Informer().GetStore().Add(tt.networkTopology)
 
 			// create plugin
+			ctx := context.Background()
 			cs := testClientSet.NewSimpleClientset()
+
 			informerFactory := informers.NewSharedInformerFactory(cs, 0)
+
 			snapshot := newTestSharedLister(nil, nodes)
+
+			podInformer := informerFactory.Core().V1().Pods()
+			podLister := podInformer.Lister()
+			informerFactory.Start(ctx.Done())
+
+			for _, p := range tt.pods{
+				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
+				if err != nil {
+					b.Fatalf("Failed to create Pod %q: %v", p.Name, err)
+				}
+				//b.Logf("Pod %v created  \n", p.Name)
+			}
 
 			registeredPlugins := []st.RegisterPluginFunc{
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
@@ -642,6 +684,7 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 			pl := &NetworkMinCost{
 				handle:      fh,
 				agLister:    &agLister,
+				podLister:   podLister,
 				ntLister:    &ntLister,
 				namespaces:  []string{"default"},
 				weightsName: "UserDefined",
@@ -650,7 +693,9 @@ func BenchmarkNetworkMinCostPlugin(b *testing.B) {
 
 			state := framework.NewCycleState()
 
-			ctx := context.Background()
+			// Without sleep sometimes the pods are not created in the api in time
+			time.Sleep(1 * time.Second)
+
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {

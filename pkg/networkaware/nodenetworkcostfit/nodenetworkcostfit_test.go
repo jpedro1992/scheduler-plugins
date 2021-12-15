@@ -92,6 +92,12 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 		},
 	}
 
+	pods:= []*v1.Pod{
+		makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
+		makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
+		makePodAllocated("P3", "n-8", 0, "basic", nil, nil),
+	}
+
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
@@ -133,6 +139,7 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 		appGroup        *v1alpha1.AppGroup
 		networkTopology *v1alpha1.NetworkTopology
 		pod             *v1.Pod
+		pods			[]*v1.Pod
 		nodes           []*v1.Node
 		nodeToFilter    *v1.Node
 		wantStatus      *framework.Status
@@ -146,6 +153,7 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			nodes:           nodes,
 			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Pod dependencies: OK: 0 NotOK: 1")),
 			nodeToFilter:    nodes[0],
+			pods:			 pods,
 		},
 		{
 			name:            "AppGroup: basic, P1 to allocate, n-6 to filter: n-6 meets network requirements",
@@ -156,6 +164,7 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			nodes:           nodes,
 			wantStatus:      nil,
 			nodeToFilter:    nodes[5],
+			pods:			 pods,
 		},
 		{
 			name:            "AppGroup: basic, P2 to allocate, n-5 to filter: n-5 does not meet network requirements",
@@ -166,6 +175,7 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			nodes:           nodes,
 			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-5 does not meet several network requirements from Pod dependencies: OK: 0 NotOK: 1")),
 			nodeToFilter:    nodes[4],
+			pods:			 pods,
 		},
 		{
 			name:            "AppGroup: basic, P2 to allocate, n-7 to filter: n-7 meets network requirements",
@@ -176,6 +186,7 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			nodes:           nodes,
 			wantStatus:      nil,
 			nodeToFilter:    nodes[6],
+			pods:			 pods,
 		},
 		{
 			name:            "AppGroup: basic, P3 to allocate, no dependencies, n-1 to filter: n-1 meets network requirements",
@@ -186,6 +197,7 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			nodes:           nodes,
 			wantStatus:      nil,
 			nodeToFilter:    nodes[0],
+			pods:			 pods,
 		},
 		{
 			name:            "AppGroup: basic, P10 to allocate (Different AppGroup!), n-1 to filter: n-1 meets network requirements",
@@ -196,66 +208,29 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			nodes:           nodes,
 			wantStatus:      nil,
 			nodeToFilter:    nodes[0],
+			pods:			 pods,
 		},
 		{
 			name:   "AppGroup: basic, P1 to allocate, n-1 to filter, multiple dependencies: n-1 does not meet network requirements",
 			agName: "basic",
-			appGroup: &v1alpha1.AppGroup{
-				ObjectMeta: metav1.ObjectMeta{Name: "basic", Namespace: "default"},
-				Spec: v1alpha1.AppGroupSpec{
-					NumMembers:               3,
-					TopologySortingAlgorithm: "KahnSort",
-					Pods: v1alpha1.AppGroupPodList{
-						v1alpha1.AppGroupPod{PodName: "P1", Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{PodName: "P2", MaxNetworkCost: 15}}},
-						v1alpha1.AppGroupPod{PodName: "P2", Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{PodName: "P3", MaxNetworkCost: 8}}},
-						v1alpha1.AppGroupPod{PodName: "P3"}}},
-				Status: v1alpha1.AppGroupStatus{
-					RunningPods: 3, PodsScheduled: v1alpha1.ScheduledList{
-						v1alpha1.ScheduledInfo{PodName: "P2", ReplicaID: "id1", Hostname: "n-3"},
-						v1alpha1.ScheduledInfo{PodName: "P2", ReplicaID: "id2", Hostname: "n-5"},
-						v1alpha1.ScheduledInfo{PodName: "P2", ReplicaID: "id3", Hostname: "n-8"},
-					}, ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
-					TopologyOrder: v1alpha1.TopologyList{
-						v1alpha1.TopologyInfo{PodName: "P1", Index: 1},
-						v1alpha1.TopologyInfo{PodName: "P2", Index: 2},
-						v1alpha1.TopologyInfo{PodName: "P3", Index: 3}},
-				},
-			},
+			appGroup: appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "basic", nil, nil),
 			nodes:           nodes,
-			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Pod dependencies: OK: 1 NotOK: 2")),
+			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Pod dependencies: OK: 0 NotOK: 1")),
 			nodeToFilter:    nodes[0],
+			pods:			 pods,
 		},
 		{
 			name:   "AppGroup: basic, P1 to allocate, n-6 to filter, multiple dependencies: n-6 meets network requirements",
 			agName: "basic",
-			appGroup: &v1alpha1.AppGroup{
-				ObjectMeta: metav1.ObjectMeta{Name: "basic", Namespace: "default"},
-				Spec: v1alpha1.AppGroupSpec{
-					NumMembers:               3,
-					TopologySortingAlgorithm: "KahnSort",
-					Pods: v1alpha1.AppGroupPodList{
-						v1alpha1.AppGroupPod{PodName: "P1", Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{PodName: "P2", MaxNetworkCost: 15}}},
-						v1alpha1.AppGroupPod{PodName: "P2", Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{PodName: "P3", MaxNetworkCost: 8}}},
-						v1alpha1.AppGroupPod{PodName: "P3"}}},
-				Status: v1alpha1.AppGroupStatus{
-					RunningPods: 3, PodsScheduled: v1alpha1.ScheduledList{
-						v1alpha1.ScheduledInfo{PodName: "P2", ReplicaID: "id1", Hostname: "n-3"},
-						v1alpha1.ScheduledInfo{PodName: "P2", ReplicaID: "id2", Hostname: "n-5"},
-						v1alpha1.ScheduledInfo{PodName: "P2", ReplicaID: "id3", Hostname: "n-8"},
-					}, ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
-					TopologyOrder: v1alpha1.TopologyList{
-						v1alpha1.TopologyInfo{PodName: "P1", Index: 1},
-						v1alpha1.TopologyInfo{PodName: "P2", Index: 2},
-						v1alpha1.TopologyInfo{PodName: "P3", Index: 3}},
-				},
-			},
+			appGroup: appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "basic", nil, nil),
 			nodes:           nodes,
 			wantStatus:      nil,
 			nodeToFilter:    nodes[5],
+			pods:			 pods,
 		},
 	}
 	for _, tt := range tests {
@@ -273,9 +248,24 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			ntLister := fakeNTInformer.Lister()
 
 			// create plugin
+			ctx := context.Background()
 			cs := testClientSet.NewSimpleClientset()
+
 			informerFactory := informers.NewSharedInformerFactory(cs, 0)
-			snapshot := newTestSharedLister(nil, tt.nodes)
+
+			snapshot := newTestSharedLister(nil, nodes)
+
+			podInformer := informerFactory.Core().V1().Pods()
+			podLister := podInformer.Lister()
+			informerFactory.Start(ctx.Done())
+
+			for _, p := range tt.pods{
+				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
+				if err != nil {
+					t.Fatalf("Failed to create Pod %q: %v", p.Name, err)
+				}
+				//t.Logf("Pod %v created  \n", p.Name)
+			}
 
 			registeredPlugins := []st.RegisterPluginFunc{
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
@@ -288,11 +278,15 @@ func TestNodeNetworkFitPlugin(t *testing.T) {
 			pl := &NodeNetworkCostFit{
 				handle:     fh,
 				agLister:   &agLister,
+				podLister:  podLister,
 				ntLister:   &ntLister,
 				namespaces: []string{"default"},
 				weightsName:  "UserDefined",
 				ntName:     "nt-test",
 			}
+
+			// Without sleep sometimes the pods are not created in the api in time
+			time.Sleep(1 * time.Second)
 
 			//t.Logf("Test: %v \n", tt.name)
 			t.Logf("PodsScheduled: %v", tt.appGroup.Status.PodsScheduled)
@@ -367,6 +361,19 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 	podNames := []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"}
 	regionNames := []string{"R1", "R2", "R3", "R4", "R5"}
 	zoneNames := []string{"Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10"}
+
+	pods:= []*v1.Pod{
+		makePodAllocated("P1", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P2", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P3", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P4", "n-9", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P5", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P6", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P7", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P8", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P9", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P10", "n-2", 0, "OnlineBoutique", nil, nil),
+	}
 
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
@@ -472,11 +479,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 		appGroup        *v1alpha1.AppGroup
 		networkTopology *v1alpha1.NetworkTopology
 		pod             *v1.Pod
+		pods            []*v1.Pod
 	}{
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 10 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 10 nodes, 1 pod to allocate",
 			nodesNum:        10,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -484,11 +492,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 100 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 100 nodes, 1 pod to allocate",
 			nodesNum:        100,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -496,11 +505,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 500 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 500 nodes, 1 pod to allocate",
 			nodesNum:        500,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -508,11 +518,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 1000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 1000 nodes, 1 pod to allocate",
 			nodesNum:        1000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -520,11 +531,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 2000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 2000 nodes, 1 pod to allocate",
 			nodesNum:        2000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -532,11 +544,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 3000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 3000 nodes, 1 pod to allocate",
 			nodesNum:        3000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -544,11 +557,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 5000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 5000 nodes, 1 pod to allocate",
 			nodesNum:        5000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -556,11 +570,12 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 		{
-			name:            "AppGroup: OnlineBoutique, 20 pods allocated, 10000 nodes, 1 pod to allocate",
+			name:            "AppGroup: OnlineBoutique, 10 pods allocated, 10000 nodes, 1 pod to allocate",
 			nodesNum:        10000,
-			dependenciesNum: 20,
+			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
 			podNames:        podNames,
 			regionNames:     regionNames,
@@ -568,6 +583,7 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			appGroup:        appGroup,
 			networkTopology: networkTopology,
 			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pods:            pods,
 		},
 	}
 
@@ -582,8 +598,8 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			nodes := getNodes(tt.nodesNum, tt.regionNames, tt.zoneNames)
 
 			// Create dependencies
-			tt.appGroup.Status.RunningPods = tt.dependenciesNum
-			tt.appGroup.Status.PodsScheduled = createDependencies(int64(tt.dependenciesNum), tt.podNames, nodes)
+			//tt.appGroup.Status.RunningPods = tt.dependenciesNum
+			//tt.appGroup.Status.PodsScheduled = createDependencies(int64(tt.dependenciesNum), tt.podNames, nodes)
 
 			// add CRDs
 			agLister := fakeAgInformer.Lister()
@@ -593,9 +609,25 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 			_ = fakeNTInformer.Informer().GetStore().Add(tt.networkTopology)
 
 			// create plugin
+			ctx := context.Background()
 			cs := testClientSet.NewSimpleClientset()
+
 			informerFactory := informers.NewSharedInformerFactory(cs, 0)
+
 			snapshot := newTestSharedLister(nil, nodes)
+
+			podInformer := informerFactory.Core().V1().Pods()
+			podLister := podInformer.Lister()
+
+			informerFactory.Start(ctx.Done())
+
+			for _, p := range tt.pods{
+				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
+				if err != nil {
+					b.Fatalf("Failed to create Pod %q: %v", p.Name, err)
+				}
+				//b.Logf("Pod %v created  \n", p.Name)
+			}
 
 			registeredPlugins := []st.RegisterPluginFunc{
 				st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
@@ -606,17 +638,19 @@ func BenchmarkNodeNetworkCostFitPlugin(b *testing.B) {
 				runtime.WithInformerFactory(informerFactory), runtime.WithSnapshotSharedLister(snapshot))
 
 			pl := &NodeNetworkCostFit{
-				handle:     	fh,
-				agLister:   	&agLister,
-				ntLister:   	&ntLister,
-				namespaces: 	[]string{"default"},
-				weightsName:  	"UserDefined",
-				ntName:     	"nt-test",
+				handle:     fh,
+				agLister:   &agLister,
+				podLister:  podLister,
+				ntLister:   &ntLister,
+				namespaces: []string{"default"},
+				weightsName:  "UserDefined",
+				ntName:     "nt-test",
 			}
 
-			state := framework.NewCycleState()
+			// Without sleep sometimes the pods are not created in the api in time
+			time.Sleep(1 * time.Second)
 
-			ctx := context.Background()
+			state := framework.NewCycleState()
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -732,6 +766,32 @@ func makePod(name string, priority int32, appGroup string, requests, limits v1.R
 			Labels: label,
 		},
 		Spec: v1.PodSpec{
+			Priority: &priority,
+			Containers: []v1.Container{
+				{
+					Name: name,
+					Resources: v1.ResourceRequirements{
+						Requests: requests,
+						Limits:   limits,
+					},
+				},
+			},
+		},
+	}
+}
+
+func makePodAllocated(name string, hostname string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
+	label := make(map[string]string)
+	label[util.AppGroupLabel] = appGroup
+	label[util.DeploymentLabel] = name
+
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: label,
+		},
+		Spec: v1.PodSpec{
+			NodeName: hostname,
 			Priority: &priority,
 			Containers: []v1.Container{
 				{

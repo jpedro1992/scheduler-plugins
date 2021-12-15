@@ -121,8 +121,8 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 		return nil
 	}
 
-	klog.Info("AppGroup CRD: ", appGroup.Name)
-	klog.Info("Network Topology CRD: ", networkTopology.Name)
+	klog.V(6).Info("AppGroup CRD: ", appGroup.Name)
+	klog.V(6).Info("Network Topology CRD: ", networkTopology.Name)
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
@@ -135,7 +135,7 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 		}
 	}
 
-	klog.Info("dependencyList: ", dependencyList)
+	klog.V(6).Info("dependencyList: ", dependencyList)
 
 	// If the pod has no dependencies, return
 	if dependencyList == nil {
@@ -169,7 +169,7 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 		}
 	}
 
-	klog.Info("scheduledList: ", scheduledList)
+	klog.V(6).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
 	if scheduledList == nil{
@@ -279,7 +279,7 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 			}
 		}
 	}
-	klog.Infof("NumNotOk: %v / numOK: %v ", numNotOK, numOK)
+	klog.V(6).Infof("NumNotOk: %v / numOK: %v ", numNotOK, numOK)
 
 	if numNotOK > numOK {
 		return framework.NewStatus(framework.Unschedulable,
