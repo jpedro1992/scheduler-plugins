@@ -590,7 +590,6 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		}, )
 
 		ntCopy.Spec.Weights = weights
-
 		ntCopy.Status.WeightCalculationTime = metav1.Time{Time: time.Now()}
 
 	}
@@ -700,7 +699,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 		}
 	}
 
-	klog.V(5).Infof("Regions %v ", regions)
+	klog.Infof("Regions %v ", regions)
 
 	for _, r1 := range regions {
 		// init vars
@@ -710,8 +709,8 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 			if r1 != r2 {
 				cost, _ := ctrl.regionGraph.GetPath(r1, r2)
 
-				allocatable, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocable bandwidth from the map (origin: zone, destination: pod zoneHostname)
-					Origin:      r1, // Time Complexity: O(1)
+				allocatable, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
+					Origin:      r1,
 					Destination: r2,
 				}]
 
@@ -770,7 +769,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 		}
 	}
 
-	klog.V(5).Infof("Zones %v ", zones)
+	klog.Infof("Zones %v ", zones)
 
 	for _, z1 := range zones {
 		// init vars
@@ -787,7 +786,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 					cost, _ := ctrl.zoneGraph.GetPath(z1, z2)
 
 					allocatable, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
-						Origin:      z1, // Time Complexity: O(1)
+						Origin:      z1,
 						Destination: z2,
 					}]
 
