@@ -19,6 +19,7 @@ package util
 import (
 	"context"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
@@ -61,7 +62,7 @@ func GetNodeZone(node *v1.Node) string {
 	return region
 }
 
-// Sort CostInfo by Origin (e.g., Region Name, Zone Name)
+// Sort OriginInfo by Origin (e.g., Region Name, Zone Name)
 type ByOrigin []schedulingv1.OriginInfo
 
 func (s ByOrigin) Len() int {
@@ -74,6 +75,21 @@ func (s ByOrigin) Swap(i, j int) {
 
 func (s ByOrigin) Less(i, j int) bool {
 	return s[i].Origin < s[j].Origin
+}
+
+// Sort CostInfo by Destination (e.g., Region Name, Zone Name)
+type ByDestination []schedulingv1.CostInfo
+
+func (s ByDestination) Len() int {
+	return len(s)
+}
+
+func (s ByDestination) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s ByDestination) Less(i, j int) bool {
+	return s[i].Destination < s[j].Destination
 }
 
 /*
@@ -145,6 +161,25 @@ func FindOriginCosts(costList []schedulingv1.OriginInfo, origin string) []schedu
 	}
 	// Costs were not found
 	return []schedulingv1.CostInfo{}
+}
+
+// May I need to sort the previous vector?
+func FindOriginBandwidthCapacity(costList []schedulingv1.CostInfo, destination string) resource.Quantity {
+	low := 0
+	high := len(costList) - 1
+
+	for low <= high {
+		mid := (low + high) / 2
+		if costList[mid].Destination == destination {
+			return costList[mid].BandwidthCapacity // Return the Bandwidth Capacity
+		} else if costList[mid].Destination < destination {
+			low = mid + 1
+		} else if costList[mid].Destination > destination {
+			high = mid - 1
+		}
+	}
+	// Bandwidth Capacity not found
+	return resource.MustParse("0")
 }
 
 // assignedPod selects pods that are assigned (scheduled and running).
