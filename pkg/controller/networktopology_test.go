@@ -150,10 +150,12 @@ func TestNetworkTopologyController_Run(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(kubeClient, controller.NoResyncPeriodFunc())
 			ntInformerFactory := schedinformer.NewSharedInformerFactory(ntClient, controller.NoResyncPeriodFunc())
 			ntInformer := ntInformerFactory.Scheduling().V1alpha1().NetworkTopologies()
+			agInformer := ntInformerFactory.Scheduling().V1alpha1().AppGroups()
 			nodeInformer := informerFactory.Core().V1().Nodes()
+			podInformer := informerFactory.Core().V1().Pods()
 			configmapInformer := informerFactory.Core().V1().ConfigMaps()
 
-			ctrl := NewNetworkTopologyController(kubeClient, ntInformer, nodeInformer, configmapInformer, ntClient)
+			ctrl := NewNetworkTopologyController(kubeClient, ntInformer, agInformer, nodeInformer, podInformer, configmapInformer, ntClient)
 
 			ntInformerFactory.Start(ctx.Done())
 			informerFactory.Start(ctx.Done())
