@@ -395,8 +395,10 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 										Origin:      zone,
 										Destination:  zonePodHostname}] = value
 								} else {
-									klog.Infof("[zones] Bandwidth allocatable not found in map... add 0.")
+									klog.Infof("[zones] Bandwidth allocatable not found in map... add minBandwidth")
 									capacity := *resource.NewQuantity(0, resource.DecimalSI)
+									capacity.Add(d.MinBandwidth)
+
 									ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
 										Origin:      zone,
 										Destination:  zonePodHostname}] = capacity
@@ -413,8 +415,9 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 									Origin:      region,
 									Destination:  regionPodHostname}] = value
 							} else {
-								klog.Infof("[regions] Bandwidth allocatable not found in map... add 0.")
+								klog.Infof("[regions] Bandwidth allocatable not found in map... add minBandwidth")
 								capacity := *resource.NewQuantity(0, resource.DecimalSI)
+								capacity.Add(d.MinBandwidth)
 
 								ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
 									Origin:      region,
@@ -723,10 +726,22 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 
 				originCosts := networkAwareUtil.FindOriginCosts(manualCosts, r1)
 
-				// Sort Costs by destination, might not be sorted since were manually defined
-				sort.Sort(networkAwareUtil.ByDestination(originCosts))
+				klog.Infof("[Region Costs] originCosts: %v", originCosts)
 
-				bandwidthCapacity := networkAwareUtil.FindOriginBandwidthCapacity(originCosts, r2)
+				bandwidthCapacity:= *resource.NewQuantity(1*1024, resource.DecimalSI)
+
+				if originCosts !=nil {
+					// Sort Costs by destination, might not be sorted since were manually defined
+					sort.Sort(networkAwareUtil.ByDestination(originCosts))
+
+					bandwidthCapacity= networkAwareUtil.FindOriginBandwidthCapacity(originCosts, r2)
+
+					klog.Infof("[Zone Costs] Bandwidth Capacity: %v", bandwidthCapacity)
+
+					if bandwidthCapacity == resource.MustParse("0"){
+						bandwidthCapacity = *resource.NewQuantity(1 * 1024, resource.DecimalSI)
+					}
+				}
 
 				if ok {
 					info := schedv1alpha1.CostInfo{
@@ -741,7 +756,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 					info := schedv1alpha1.CostInfo{
 						Destination:        r2,
 						BandwidthCapacity:  bandwidthCapacity,
-						BandwidthAllocated: *resource.NewQuantity(0, resource.DecimalSI),
+						BandwidthAllocated: *resource.NewQuantity(0, resource.DecimalSI), // consider as zero
 						NetworkCost:        int64(cost),
 					}
 					klog.Infof("Not OK [Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
@@ -799,10 +814,22 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 
 					originCosts := networkAwareUtil.FindOriginCosts(manualCosts, z1)
 
-					// Sort Costs by destination, might not be sorted since were manually defined
-					sort.Sort(networkAwareUtil.ByDestination(originCosts))
-					
-					bandwidthCapacity := networkAwareUtil.FindOriginBandwidthCapacity(originCosts, z2)
+					klog.Infof("[Zone Costs] originCosts: %v", originCosts)
+
+					bandwidthCapacity:= *resource.NewQuantity(1*1024, resource.DecimalSI)
+
+					if originCosts !=nil {
+						// Sort Costs by destination, might not be sorted since were manually defined
+						sort.Sort(networkAwareUtil.ByDestination(originCosts))
+
+						bandwidthCapacity= networkAwareUtil.FindOriginBandwidthCapacity(originCosts, z2)
+
+						klog.Infof("[Zone Costs] Bandwidth Capacity: %v", bandwidthCapacity)
+
+						if bandwidthCapacity == resource.MustParse("0"){
+							bandwidthCapacity = *resource.NewQuantity(1*1024, resource.DecimalSI)
+						}
+					}
 
 					if ok {
 						info := schedv1alpha1.CostInfo{
@@ -820,7 +847,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 							info := schedv1alpha1.CostInfo{
 								Destination:        z2,
 								BandwidthCapacity:  bandwidthCapacity,
-								BandwidthAllocated: *resource.NewQuantity(1*0, resource.DecimalSI), // Consider as zero
+								BandwidthAllocated: *resource.NewQuantity(0, resource.DecimalSI), // Consider as zero
 								NetworkCost:        int64(cost),
 							}
 
