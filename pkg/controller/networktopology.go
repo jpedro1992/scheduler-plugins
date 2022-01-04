@@ -804,13 +804,20 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 					Z2: z2,
 				}]
 
+				klog.Infof("[Zone Costs] z1: %v, z2: %v")
+
 				if ok && value {
+					klog.Infof("[Zone Costs] OK and value")
 					cost, _ := ctrl.zoneGraph.GetPath(z1, z2)
+
+					klog.Infof("[Zone Costs] cost: %v")
 
 					allocatable, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
 						Origin:      z1,
 						Destination: z2,
 					}]
+
+					klog.Infof("[Zone Costs] allocatable: %v", allocatable)
 
 					originCosts := networkAwareUtil.FindOriginCosts(manualCosts, z1)
 
