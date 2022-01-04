@@ -12,8 +12,8 @@
   - [2 - Cloud2Edge application running on a multi-region geo-distributed cluster](#2---cloud2edge-application-running-on-a-multi-region-geo-distributed-cluster)
 - [Proposal - Design & Implementation Details](#proposal---design--implementation-details)
   - [Overview of the System Design](#overview-of-the-system-design)
-  - [Application Group CRD (AppGroup)](#application-group-crd-appgroup)
-  - [Network Topology CRD (NetworkTopology)](#network-topology-crd-networktopology)
+  - [Application Group CRD](#application-group-crd)
+  - [Network Topology CRD](#network-topology-crd)
   - [The inclusion of bandwidth in the scheduling process](#the-inclusion-of-bandwidth-in-the-scheduling-process)
     - [Bandwidth Requests via extended resources](#bandwidth-requests-via-extended-resources)
     - [Bandwidth Limitations via the Bandwidth CNI plugin](#bandwidth-limitations-via-the-bandwidth-cni-plugin)
@@ -32,6 +32,11 @@
 
 # Summary
 
+This proposal introduces an end-to-end solution to model/weight a cluster's network latency and 
+topological information, and leverage that to better schedule latency- and bandwidth-sensitive workloads.
+
+<!-- other details have been excluded from the summary
+
 This proposal describes the behavior of the Network-Aware Scheduling framework
 that considers latency and bandwidth in the scheduling decision-making process.
 
@@ -48,35 +53,47 @@ To tackle latency and bandwidth in the scheduling process, three plugins are pro
 - `TopologicalSort` (**QueueSort**).
 - `NodeNetworkCostFit` (**Filter**).
 - `NetworkMinCost` (**Score**).
+-->
 
 # Motivation
 
 Many applications are latency-sensitive, demanding lower latency between microservices in the application.
 Scheduling policies that aim to reduce costs or increase resource efficiency are not enough for applications
 where end-to-end latency becomes a primary objective.
+
 Applications such as the Internet of Things (IoT), multi-tier web services, and video streaming services
 would benefit the most from network-aware scheduling policies, which consider latency and bandwidth
 in addition to the default resources (e.g., CPU and memory) used by the scheduler.
 
 Users encounter latency issues frequently when using multi-tier applications.
-These applications usually include tens to hundreds of microservices with complex interdependencies/chains.
-Distance from servers with chained microservices deployed is usually the primary culprit.
+These applications usually include tens to hundreds of microservices with complex interdependencies.
+Distance from servers is usually the primary culprit.
 The best strategy is to reduce the latency between chained microservices in the same application,
 according to the prior work about [Service Function Chaining](https://www.sciencedirect.com/science/article/pii/S1084804516301989) (SFC).
 
-Besides, bandwidth plays an essential role for those applications with high volumes of data transfers among microservices.
-For example, multiple replicas in a database application may require frequent copies to ensure data consistency.
-[Spark jobs](https://spark.apache.org/) may have frequent data transfers among map and reduce nodes.
-Insufficient network capacity in nodes would lead to increasing delay or packet drops,
-which will degrade the quality of service for applications.
+Besides, bandwidth plays an essential role for those applications with high volumes of data transfers 
+among microservices. For example, multiple replicas in a database application may require frequent 
+copies to ensure data consistency. [Spark jobs](https://spark.apache.org/) may have frequent data transfers 
+among map and reduce nodes. Insufficient network capacity in nodes would lead to increasing delay or packet 
+drops, which will degrade the Quality of Service (QoS) for applications.
 
-We propose a series of **Network-Aware Scheduling Plugins** for Kubernetes that focus on delivering low latency to end-users
+We propose two **Network-Aware Scheduling Plugins** for Kubernetes that focus on delivering low latency to end-users
 and ensuring bandwidth reservations in pod scheduling.
 
 This work significantly extends the previous work open-sourced [here](https://github.com/jpedro1992/sfc-controller) 
 that implements a latency-aware scheduler extender based on the [scheduler extender](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) design.
 
 ## Goals
+
+- Consider different pods as an Application via custom resources (**AppGroup CRD**).
+- Define network weights between regions (`topology.kubernetes.io/region`) and zones (`topology.kubernetes.io/zone`) 
+in the cluster via custom resources (**NetworkTopology CRD**).
+- Advertise the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/).
+- Implementation of a **QueueSort** plugin for [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting).
+- Implementation of a **Filter & Score** plugin to filter out nodes based 
+on microservice dependencies and score nodes with lower network costs higher to achieve latency-aware scheduling.  
+    
+<!-- previous goal section
 
 - Provide a network-aware framework to extend scheduling features of Kubernetes by considering latency and bandwidth.
 - Consider different pods as an Application:    
@@ -92,33 +109,42 @@ that implements a latency-aware scheduler extender based on the [scheduler exten
     - Implementation of a **Filter** plugin based on the AppGroup CRD.
 - Near-optimal scheduling decisions based on network costs:
     - Implementation of a **Score** plugin that scores higher nodes with lower network costs.    
+    
+-->
 
 ## Non-Goals
 
 - Descheduling due to unexpected outcomes is not addressed in this proposal.
-- The conflict between plugins in this proposal and other plugins are not studied in this proposal. Users are welcome to try plugins
-  in this proposal with other plugins (e.g., `RequestedToCapacityRatio`, `BalancedAllocation`). However, a higher weight must be given to
-  our plugin ensuring low network costs are preferred.
+- The conflict between plugins in this proposal and other plugins are not studied in this proposal. 
+Users are welcome to try plugins in this proposal with other plugins (e.g., `RequestedToCapacityRatio`, 
+`BalancedAllocation`). However, a higher weight must be given to our plugin ensuring low network costs 
+are preferred.
 
 ## Use cases / Topologies 
+
+<!-- previous version - EXTRA: 
+
+So, network latency and available bandwidths between nodes can vary according to their locations in the infrastructure.
+
+-->
 
 ### 1 - Spark/Database applications running in Data centers or small scale cluster topologies
 
 Network-aware scheduling examines the infrastructure topology, 
-so latencies and bandwidth between nodes are considered while making scheduling decisions.
+so network latency and bandwidth between nodes are considered while making scheduling decisions.
 Data centers with fat-tree topology or cluster topology can benefit from our network-aware framework, 
-as network conditions between nodes vary according to their positions in the topologies.
+as network conditions (i.e., network latency, available bandwidth) between nodes can vary according to their 
+locations in the infrastructure. 
 
 <p align="center"><img src="figs/cluster.png" title="Cluster Topology" width="600" class="center"/></p>
 
 <p align="center"><img src="figs/data_center.png" title="DC Topology" width="600" class="center"/></p>
 
-Network latency and available bandwidths between nodes can vary according to their locations in the infrastructure.
 Deploying microservices on different sets of nodes will impact the application's response time. 
 For specific applications, latency and bandwidth requirements can be critical.  
 For example, in a [Redis cluster](https://redis.io/topics/cluster-tutorial), 
-master nodes need to synchronize data with slave nodes frequently. Namely, there are dependencies between the masters and the slaves.
-High latencies or low bandwidths between masters and slaves can lead to slow CRUD operations.
+master nodes need to synchronize data with slave nodes frequently. Namely, there are dependencies between the 
+masters and the slaves. High latency or low bandwidth between masters and slaves can lead to slow CRUD operations.
 
 <p align="center"><img src="figs/redis.png" title="Redis app" width="600" class="center"/></p>
 
@@ -128,7 +154,8 @@ Multi-region Geo-distributed scenarios benefit the most from our framework and n
 
 <p align="center"><img src="figs/multi_region.png" title="MultiRegion Topology" width="600" class="center"/></p>
 
-High latency is a big concern in these topologies, especially for IoT applications (e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/)). 
+High latency is a big concern in these topologies, especially for IoT applications 
+(e.g., [Eclipse Hono](https://github.com/eclipse/hono), [Eclipse Cloud2Edge](https://www.eclipse.org/packages/packages/cloud2edge/)). 
 For example, in the Cloud2Edge platform, there are several dependencies among the several APIs and MQTT brokers where devices connect to:
 
 <p align="center"><img src="figs/cloud2edge.png" title="Cloud2Edge" width="600" class="center"/></p>
@@ -137,27 +164,37 @@ For example, in the Cloud2Edge platform, there are several dependencies among th
 
 ## Overview of the System Design
 
-As an initial design, we plan to implement three plugins:  
-- A **QueueSort** function named `TopologicalSort`:
-    - Pods are sorted based on their established dependencies.
-- A **Filter** function named `NodeNetworkCostFit`:
-    - Nodes are filtered out if they cannot support the network requirements of the Pod's AppGroup.
-- A **Score** function called `NetworkMinCost`:
-    - Nodes are scored based on network weights ensuring network latency is minimized for pods belonging to the same application.
+The proposal introduces two [Custom Resources (CRs)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) 
+defined as Custom Resource Definitions (CRDs), **AppGroup CRD** and **NetworkTopology CRD**, to maintain 
+both the service topology information from application microservice dependencies and the infrastructure 
+network topology where network weights are established between regions and zones in the cluster. 
+Thus, both application and infrastructure network topology are considered during scheduling. 
 
-A [Custom Resource Definition (CRD)](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) has been designed to establish an Application Group (AppGroup CRD). 
+The proposal also presents a bandwidth resource component (DaemonSet) to advertise bandwidth resources 
+as **extended resources** to allow already available filter/scoring plugins (e.g., `PodFitsResources`, 
+`BalancedAlocation`) to consider bandwidth allocation.
 
-Also, another CRD (NetworkTopology CRD) establishes network weights among the regions and zones in the cluster to be used by the scoring plugin.
+To tackle latency and bandwidth in the scheduling process, three plugins are proposed in this document: 
+- `TopologicalSort` (**QueueSort**).
+- `NodeNetworkCostFit` (**Filter**).
+- `NetworkMinCost` (**Score**).
+
+As an initial design, we plan to implement two plugins:  
+- A **QueueSort** function named `TopologicalSort` where pods are sorted based on their established dependencies.
+- A **Filter & Score** functions named `NetworkOverhead` where nodes are filtered out if they cannot support the 
+network requirements of the Pod's AppGroup or scored based on network weights ensuring network latency is minimized for pods belonging to the same application.
 
 Further explanations are given below on how the proposed plugins interact with both CRDs. 
 
 <p align="center"><img src="figs/design.png" title="System Design" width="900" class="center"/></p>
 
-## Application Group CRD (AppGroup)
+## Application Group CRD
 
 We designed an AppGroup CRD for service chains based on the [Pod Group](https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/kep/42-podgroup-coscheduling/README.md) concept introduced for the Co-scheduling plugin. 
-The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different pods based on service topology information. 
-The AppGroup CRD also records pod allocations (i.e., node/pod pairs) under the status part.
+The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different workloads (e.g., pods) based on service topology information. 
+The AppGroup CRD also records current allocations (i.e., workload name, replica ID, hostname) under the status part. <!-- To remove? -->
+
+<!-- Add workloadRef! (name, apiVersion, and kind as its sub-fields) -->
 
 ```yaml
 # App Group CRD spec
@@ -209,26 +246,26 @@ spec:
               topologySortingAlgorithm:
                 type: string
                 description: The algorithm for TopologyOrder (Status)
-              pods:
-                description: The Pods belonging to the group array of AppGroupPod
+              workloads:
+                description: The workloads belonging to the group array of AppGroupWorkload
                 items:
-                  description: AppGroupPod contains information about one Pod.
+                  description: AppGroupWorkload contains information about one Workload.
                   properties:
-                    podName:
+                    workloadName:
                       type: string
-                      description: Name of the Pod.
+                      description: Name of the workload.
                     dependencies:
                       items:
-                        description: DependenciesList establishes dependencies between pods.
+                        description: DependenciesList establishes dependencies between workloads.
                         properties:
-                          podName:
+                          workloadName:
                             description: Name of the Pod.
                             type: string
                           minBandwidth:
                             anyOf:
                             - type: integer
                             - type: string
-                            description: Bandwidth demand between both Pods.
+                            description: Bandwidth demand between two workloads.
                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                             x-kubernetes-int-or-string: true
                           maxNetworkCost:
@@ -237,42 +274,42 @@ spec:
                             minimum: 0
                             maximum: 10000
                             format: int64
-                            description: The max Network Cost between both Pods.
+                            description: The max Network Cost between two workloads.
                         required:
-                        - podName
+                        - workloadName
                         type: object
                       type: array
                   required:
-                  - podName
+                  - workloadName
                   type: object
                 type: array
             required:
             - numMembers
             - topologySortingAlgorithm
-            - pods
+            - workloads
             type: object
           status:
-            description: Record Pod Allocations (Pod id, hostnames).
+            description: Record workload allocations (Workload Name, replica id, hostname).
             properties:
-              runningPods:
-                description: The number of actively running pods.
+              runningWorkloads:
+                description: The number of actively running workloads (e.g., pods).
                 format: int32
                 type: integer
                 minimum: 0
-              podsScheduled:
-                description: The Pods scheduled in the cluster (ScheduledList)
+              scheduled:
+                description: The workloads scheduled in the cluster (ScheduledList)
                 items:
-                  description: ScheduledInfo contains information about one Pod.
+                  description: ScheduledInfo contains information about one Workload.
                   properties:
-                    podName:
+                    workloadName:
                       type: string
-                      description: Name of the Pod.
+                      description: Name of the Workload.
                     replicaID:
                       type: string
-                      description: Pod ID
+                      description: replica ID
                     hostname:
                       type: string
-                      description: Hostname allocating Pod instance
+                      description: Hostname allocating the workload instance
                   type: object
                 type: array
               scheduleStartTime:
@@ -284,20 +321,20 @@ spec:
                 format: date-time
                 type: string
               topologyOrder:
-                description: The optimal order to schedule pods on this App Group based on a given algorithm.
+                description: The optimal order to schedule workloads on this App Group based on a given algorithm.
                 items:
-                  description: Pod Name and Pod Priority index
+                  description: Workload Name and Priority index
                   properties:
-                    podName:
+                    workloadName:
                       type: string
-                      description: Name of the Pod.
+                      description: Name of the Workload.
                     index:
                       type: integer
                       default: 1
                       minimum: 1
                       format: int64
-                      description: Priority index for each Pod (e.g., 1, 2, ...)
-                          (1 means pod should be scheduled first in the AppGroup)
+                      description: Priority index for each workload (e.g., 1, 2, ...)
+                          (1 means workload should be scheduled first in the AppGroup)
                   type: object
                 type: array
             type: object
@@ -314,6 +351,8 @@ status:
 
 ### Example
 
+<!-- Add workloadRef! (name, apiVersion, and kind as its sub-fields) -->
+
 <p align="center"><img src="figs/chain.png" title="Chain" width="600" class="center"/></p>
 
 ```yaml
@@ -325,18 +364,18 @@ metadata:
 spec:
   numMembers: 3
   topologySortingAlgorithm: KahnSort
-  pods:
-    - podName: P1
+  workloads: 
+    - workloadName: P1 # Corresponds to the Kubernetes service (Label selector)
       dependencies:
-        - podName: P2
+        - workloadName: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 30
-    - podName: P2
+    - workloadName: P2
       dependencies:
-        - podName: P3
+        - workloadName: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
-    - podName: P3
+    - workloadName: P3
 ```
 
 An AppGroup controller updates the AppGroup CRD regarding the pods already scheduled in the cluster and the preferred topology order for pod allocations. 
@@ -346,10 +385,10 @@ Currently, four algorithms are supported for topological sorting:
 [TarjanSort](https://www.geeksforgeeks.org/tarjan-algorithm-find-strongly-connected-components/), 
 ReverseKahn, ReverseTarjan**. 
 
-ReverseKahn and ReverseTarjan essentially invert the order given by KahnSort and TarjanSort, respectively.  
+ReverseKahn and ReverseTarjan essentially reverse the order given by Kahn and Tarjan, respectively.
 
 The implementation is based on the work open-sourced [here](https://github.com/otaviokr/topological-sort).
-Each pod has an index based on the sorting algorithm. An index of 1 means the pod should be allocated first in the AppGroup.
+Each workload has an index based on the sorting algorithm. An index of 1 means the workload should be allocated first in the AppGroup.
 
 ```go
 // AppGroupController is a controller that process App groups using provided Handler interface
@@ -393,29 +432,29 @@ type AppGroupSpec struct {
 	// The preferred Topology Sorting Algorithm
 	TopologySortingAlgorithm string `json:"topologySortingAlgorithm,omitempty" protobuf:"bytes,2,opt,name=topologySortingAlgorithm"`
 
-	// Pods defines the pods belonging to the group
-	Pods AppGroupPodList `json:"pods,omitempty" protobuf:"bytes,3,rep,name=pods, casttype=AppGroupPodList"`
+	// Workloads defines the workloads belonging to the Appgroup
+	Workloads AppGroupPodList `json:"workloads,omitempty" protobuf:"bytes,3,rep,name=workloads, casttype=AppGroupWorkloadList"`
 }
 
-// AppGroupPod represents the number of Pods belonging to the App Group.
+// AppGroupWorkload represents the Workloads belonging to the App Group.
 // +protobuf=true
-type AppGroupPod struct {
-	// Name of the Pod.
-	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
+type AppGroupWorkload struct {
+	// Name of the Service (Label Selector).
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 
-	// Dependencies of the Pod.
+	// Dependencies of the Workload.
 	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,rep,name=dependencies, casttype=DependenciesList"`
 }
 
-// AppGroupPodList contains an array of Pod objects.
+// AppGroupWorkloadList contains an array of AppGroupWorkload objects.
 // +protobuf=true
-type AppGroupPodList []AppGroupPod
+type AppGroupWorkloadList []AppGroupWorkload
 
 // DependenciesInfo contains information about one dependency.
 // +protobuf=true
 type DependenciesInfo struct {
 	// Name of the Pod.
-	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 
 	// MinBandwidth between pods
 	// +optional
@@ -426,19 +465,19 @@ type DependenciesInfo struct {
 	MaxNetworkCost int64 `json:"maxNetworkCost,omitempty" protobuf:"bytes,3,opt,name=maxNetworkCost"`
 }
 
-// DependenciesList contains an array of ResourceInfo objects.
+// DependenciesList contains an array of DependenciesInfo objects.
 // +protobuf=true
 type DependenciesList []DependenciesInfo
 
 // AppGroupStatus represents the current state of a app group.
 type AppGroupStatus struct {
-	// The number of actively running pods.
+	// The number of actively running workloads (e.g., pods).
 	// +optional
-	RunningPods int32 `json:"runningPods,omitempty" protobuf:"bytes,1,opt,name=runningPods"`
+	RunningWorkloads int32 `json:"runningWorkloads,omitempty" protobuf:"bytes,1,opt,name=runningWorkloads"`
 
-	// PodsScheduled defines pod allocations (Pod name, Pod id, hostname).
+	// Scheduled defines pod allocations (Workload name, Pod replica id, hostname).
 	// +optional
-	PodsScheduled ScheduledList `json:"podsScheduled,omitempty" protobuf:"bytes,2,rep,name=podsScheduled,casttype=ScheduledList"`
+	Scheduled ScheduledList `json:"scheduled,omitempty" protobuf:"bytes,2,rep,name=scheduled,casttype=ScheduledList"`
 
 	// ScheduleStartTime of the group
 	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty" protobuf:"bytes,3,opt,name=scheduleStartTime"`
@@ -450,31 +489,31 @@ type AppGroupStatus struct {
 	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,5,rep,name=topologyOrder,casttype=TopologyList"`
 }
 
-// AppGroupScheduled represents the Pod Affinities of a given Pod
+// ScheduledInfo represents a workload scheduled in the cluster
 // +protobuf=true
 type ScheduledInfo struct {
-	// Pod Name
-	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
+	// Workload Name
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 
-	// Replica ID
+	// Pod Replica ID
 	ReplicaID string `json:"replicaID,omitempty" protobuf:"bytes,2,opt,name=replicaID"`
 
-	// Pod Hostname
+	// Hostname
 	Hostname string `json:"hostname,omitempty" protobuf:"bytes,3,opt,name=hostname"`
 }
 
-// ScheduledList contains an array of Pod Affinities.
+// ScheduledList contains an array of ScheduledInfo.
 // +protobuf=true
 type ScheduledList []ScheduledInfo
 
-// AppGroupTopology represents the calculated order for the given AppGroup
+// TopologyInfo represents the calculated order for a given Workload.
 // +protobuf=true
 type TopologyInfo struct {
-	PodName string `json:"podName,omitempty" protobuf:"bytes,1,opt,name=podName"`
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 	Index   int32  `json:"index,omitempty" protobuf:"bytes,2,opt,name=index"`
 }
 
-// TopologyList contains an array of Pod orders for TopologySorting algorithm.
+// TopologyList contains an array of TopologyInfo.
 // +protobuf=true
 type TopologyList []TopologyInfo
 
@@ -495,36 +534,37 @@ type AppGroupList struct {
 ### AppGroup Test based on Online Boutique
 
 In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
-It consists of 11 pods, which we named from P1 - P11. 
+It consists of 11 workloads each one representing a [Service](https://kubernetes.io/docs/concepts/services-networking/service/) corresponding to a group of Pods, which we named from P1 - P11. 
 
 <p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="800" class="center"/></p>
 
 As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
 
-We attribute an **index** to each pod to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-queuesort).
+We attribute an **index** to each workload to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-queuesort).
 The topology list corresponds to:
 
 ```go
-topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10)]
+topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10) (P11 11)]
 ```
 
-change appGroup test here!
+<!-- change appGroup test here! -->
 
 <p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="900" class="center"/></p>
 
-## Network Topology CRD (NetworkTopology)
+## Network Topology CRD
 
 We also designed a NetworkTopology CRD based on the current [NodeResourceTopology CRD](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/noderesourcetopology).
-The goal is to establish network costs between regions and zones in the cluster.  
+The goal is to store and update network costs between all pair-wise nodes in the cluster based on their zones and regions.  
 
-As an initial design, weights can be manually defined in a single NetworkTopology CRD where all network weights are available.
+As an initial design,  network weights can be manually defined in a single NetworkTopology CR where network costs between
+zones and between regions are specified.
 
 As a future plan, we are currently working on another project, where we are designing a [networkTopology controller](https://github.com/jpedro1992/network-topology-controller)  
 that will react to node additions, updates, or removals. Also, it will update the network weights based on latency measurements. 
 
 Experiments will evaluate the performance and feasibility of the network topology CRD. 
-We argue that a single CRD might impact the system's performance concerning execution time to find the network weights for 
-a given region or zone while deploying multiple CRDs has an overhead regarding the system's memory to save all CRDs. 
+We argue that a single CR might impact the system's performance concerning execution time to find the network weights for 
+a given region or zone while deploying multiple CRs has an overhead regarding the system's memory to save all CRs. 
 
 ```yaml
 # Network CRD spec
@@ -786,7 +826,7 @@ type NetworkTopologySpec struct {
 	// The manual defined weights of the cluster
 	Weights WeightList `json:"weights,omitempty" protobuf:"bytes,1,rep,name=weights,casttype=WeightList"`
 
-	// ConfigmapName to be used for cost calculation
+	// ConfigmapName to be used for cost calculation (To be used by the Network Topology Controller)
 	ConfigmapName string `json:"configmapName,omitempty" protobuf:"bytes,2,opt,name=configmapName"`
 }
 
@@ -797,10 +837,6 @@ type NetworkTopologyStatus struct {
 
 	// The calculation time for the weights in the network topology CRD
 	WeightCalculationTime metav1.Time `json:"weightCalculationTime,omitempty" protobuf:"bytes,2,opt,name=weightCalculationTime"`
-
-	// The calculated weights in the topology.
-	// +optional
-	// Weights WeightList `json:"weightList,omitempty"`
 }
 
 // WeightList contains an array of WeightInfo objects.
@@ -844,9 +880,9 @@ type CostInfo struct {
 	// +optional
 	BandwidthCapacity resource.Quantity `json:"bandwidthCapacity,omitempty" protobuf:"bytes,2,opt,name=bandwidthCapacity"`
 
-	// Bandwidth allocated between origin and destination.
+	// Bandwidth allocatable between origin and destination.
 	// +optional
-	BandwidthAllocated resource.Quantity `json:"bandwidthAllocated,omitempty" protobuf:"bytes,3,opt,name=bandwidthAllocated"`
+	BandwidthAllocatable resource.Quantity `json:"bandwidthAllocatable,omitempty" protobuf:"bytes,3,opt,name=bandwidthAllocatable"`
 
 	// Network Cost between origin and destination (e.g., Dijkstra shortest path, etc)
 	NetworkCost int64 `json:"networkCost,omitempty" protobuf:"bytes,4,opt,name=networkCost"`
@@ -1012,34 +1048,34 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 #### `TopologicalSort` Example
 
 Let's consider the Online Boutique application shown previously. 
-The AppGroup consists of 10 pods and the topology order based on the KahnSort algorithm is **P1, P10, P9, P8, P7, P6, P5, P4, P3, P2.**
+The AppGroup consists of 11 workloads (11 groups of pods) and the topology order based on the KahnSort algorithm is **P1, P10, P9, P8, P7, P6, P5, P4, P3, P2, P11.**
 
 The plugin favors low indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
 
 <p align="center"><img src="figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
 
 
-### Description of the `NodeNetworkCostFit` 
+### Description of the `NetworkOverhead` 
 
-**Extension point: Filter**
+#### Extension point: Filter 
 
-Pod dependencies established in the AppGroup CRD must be respected.
+Workoad dependencies established in the AppGroup CRD must be respected.
 
 This plugin focuses on `maxNetworkCost` requirements. 
 
-Nodes providing higher network costs than the `maxNetworkCost` requirement are filtered out. 
+Nodes providing higher network costs than the `maxNetworkCost` requirement must be filtered out. 
 
 Several dependencies may exist since multiple pods can be already deployed on the network. 
 
 As an initial design, we plan to filter out nodes that unmet a higher number of dependencies to reduce the number of nodes being scored. 
 
-Also, `minBandwidth` requirements will be considered at a later stage 
+Also, `minBandwidth` requirements will be considered at a later stage. 
 based on the bandwidth capacity / allocatable available in each region / zone. 
 The bandwidth allocatable in each region or zone will be handled by the Network Topology controller previously mentioned.  
 
 ```go
 // Filter : evaluate if node can respect maxNetworkCost requirements
-func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
     // Check if Pod belongs to an AppGroup
     (...)
     // Check if pods already available, otherwise return
@@ -1049,7 +1085,7 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
     // Retrieve network costs from the AppGroup CRD based on the region and zone of the node being filtered
     // Save them in a map to search for costs faster
     (...)
-    // Main Procedure of NodeNetworkCostFit 
+    // Main Procedure 
     var numOK int64 = 0
     var numNotOK int64 = 0 
     // check if maxNetworkCost fits 
@@ -1114,12 +1150,12 @@ func (pl *NodeNetworkCostFit) Filter(ctx context.Context, cycleState *framework.
 }
 ```
 
-#### `NodeNetworkCostFit` Example
+#### `NetworkOverhead` Filter Example
 
-Let's consider the following AppGroup CRD for the appGroup `A1` containing three pods `P1 - P3`:
+Let's consider the following AppGroup CRD for the appGroup `A1` containing three workloads representing pods `P1 - P3`:
 
 ```yaml
-# Example App Group CRD spec
+# Example App Group CR spec
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: AppGroup
 metadata:
@@ -1127,18 +1163,18 @@ metadata:
 spec:
   numMembers: 3
   topologySortingAlgorithm: KahnSort
-  pods:
-    - podName: P1
+  workloads:
+    - workloadName: P1
       dependencies:
-        - podName: P2
+        - workloadName: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 15
-    - podName: P2
+    - workloadName: P2
       dependencies:
-        - podName: P3
+        - workloadName: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
-    - podName: P3
+    - workloadName: P3
 ```
 
 At a given moment, the status part is the following: 
@@ -1148,25 +1184,24 @@ At a given moment, the status part is the following:
 (...)        
           status: 
             properties:
-              podsScheduled:
-                - podName: P2
+              scheduled:
+                - workloadName: P2
                   replicaID: pod2-replica1
                   hostname: N1
-                - podName: P3
+                - workloadName: P3
                   replicaID: pod3-replica1
                   hostname: N4
               (...)   
 ```
 
-Two pods have already been allocated: one replica of `P2` in node `N1` and one replica of `P3` in node `N4`. 
+Two pods have already been allocated: one instance of `P2` in node `N1` and one instance of `P3` in node `N4`. 
 
 Also, the kubernetes cluster has two regions `us-west-1` and `us-east-1`, four zones `Z1 - Z4` and eight nodes `N1 - N8`. 
 
 The NetworkTopology CRD is the following:
 
 ```yaml
-# Example Network CRD 
-# Example Network CRD 
+# Example Network Topology CR 
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
@@ -1220,19 +1255,20 @@ Thus, the cluster topology corresponds to the following network graph:
  
 <p align="center"><img src="figs/graph.png" title="graph" width="1000" class="center"/></p>
 
-Now, let's consider that we need to schedule the pod `P1`. `P2` is an established dependency of `P1`. 
+Now, let's consider that we need to schedule one pod corresponding to the workload `P1`. 
+`P2` is an established dependency of `P1`. 
 
 So, nodes that do not respect its network cost requirement (i.e., `maxNetworkCost: 15`) will be filtered out:
 
+<!-- change example! (Workload, remove pod) -->
+
 <p align="center"><img src="figs/filterExample.png" title="filterExample" width="600" class="center"/></p>
 
-### Description of the `NetworkMinCost` 
+#### Extension point: Score
 
-**Extension point: Score**
+We propose a scoring function to favor nodes with the lowest combined network cost based on the pod's AppGroup.
 
-We propose a scoring plugin called `NetworkMinCost` to favor nodes with the lowest combined network cost based on the pod's AppGroup.
-
-Pod allocations (pod name, pod id, pod hostname) are available in the AppGroup CRD updated by the controller. 
+Workload allocations (workload name, replica id, hostname) are available in the AppGroup CRD updated by the controller. 
 
 Network weights among regions and zones in the cluster are available in the NetworkTopology CRD. 
  
@@ -1240,12 +1276,12 @@ First, we check if pods are already running for the Pod's AppGroup. Otherwise, w
 
 Second, we retrieve network costs related to the node being scored. 
 
-Finally, we score the node based on the accumulated network cost related to the pod's established dependencies. 
+Finally, we score the node based on the accumulated network cost related to the workload's established dependencies. 
 The accumulated cost is returned as the score:
 
 ```go
 // Score : evaluate score for a node
-func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) 
+func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) 
     // Check if pod belongs to an AppGroup 
     (...)
     // Check if pods already available, otherwise return
@@ -1255,7 +1291,7 @@ func (pl *NetworkMinCost) Score(ctx context.Context, cycleState *framework.Cycle
     // Retrieve network costs from the AppGroup CRD based on the region and zone of the node being scored
     // Save them in a map to search for costs faster
     (...)
-    // Main Procedure of NetworkMinCost
+    // Main Procedure
     var cost int64 = 0
     // calculate accumulated shortest path
     for _, podAllocated := range appGroup.Status.PodsScheduled { // For each pod already allocated
@@ -1318,7 +1354,7 @@ After normalization, **nodes with lower costs are favored** since it also corres
 
 ```go
 // NormalizeScore : normalize scores
-func (pl *NetworkMinCost) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
+func (pl *NetworkOverhead) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
 	// Lower scores correspond to lower latency
 	// Get Min and Max Scores to normalize between framework.MaxNodeScore and framework.MinNodeScore
 	minCost, maxCost := GetMinMaxScores(scores)
@@ -1363,18 +1399,20 @@ For instance, consider the following scheduler policy config file as an example:
 "priorities" : [
 	{"name" : "LeastRequestedPriority", "weight" : 1},
 	{"name" : "BalancedResourceAllocation", "weight" : 1},
-	{"name" : "NetworkMinCost", "weight" : 5}
+	{"name" : "NetworkOverhead", "weight" : 5}
 ]
 }
 ```
 
-#### `NetworkMinCost` Example
+#### `NetworkOverhead` Score Example
 
-Let's consider the AppGroup CRD and NetworkTopology CRD shown for the `NodeNetworkCostFit` example [here](#nodeappgroupmaxnetworkcostfit-example).
+Let's consider the AppGroup CR and NetworkTopology CR shown for the Filter example [here](#networkoverhead-filter-example)
 
-After filtering nodes with the `NodeNetworkCostFit` plugin, four nodes remain as candidate nodes for the pod `P1`. 
+After filtering nodes with the `NetworkOverhead` plugin, four nodes remain as candidate nodes for the pod corresponding to the workload `P1`. 
 
 Nodes with the lowest combined network costs will be scored higher: 
+
+<!-- change example! (Workload, remove pod) -->
 
 <p align="center"><img src="figs/scoreExample.png" title="scoreExample" width="800" class="center"/></p>
 
@@ -1382,13 +1420,13 @@ Nodes with the lowest combined network costs will be scored higher:
 
 - CRDs installation:
 
-    The `TopologicalSort` plugin depends on the specification of an AppGroup CRD for different pods.
+    The `TopologicalSort` plugin depends on the specification of an AppGroup CR.
     
-    The `NodeNetworkCostFit` plugin depends on both CRDs (AppGroup CRD and NetworkTopology CRD). Otherwise, it is not able to filter out nodes.
+    The `NetworkOverhead` plugin depends on both CRs (AppGroup and NetworkTopology). 
+    Otherwise, it is not able to filter / score nodes.
     
-    The `NetworkMinCost` plugin depends on both CRDs (AppGroup CRD and NetworkTopology CRD).
-
-    Without both CRDs, the plugins `TopologicalSort` and `NetworkMinCost` will follow a default strategy: queue sorting based on the QoS plugin and scoring all nodes equally, respectively.
+    Without both CRDs, the plugins `TopologicalSort` and `NetworkOverhead` (scoring) will follow a default 
+    strategy: queue sorting based on the QoS plugin and scoring all nodes equally, respectively.
     
 - QueueSort extension point:
 
@@ -1401,12 +1439,12 @@ Nodes with the lowest combined network costs will be scored higher:
 Unit tests and Integration tests will be added: 
 
 - Unit Tests
-    - For both CRDs (AppGroup and NetworkTopology) concerning the controllers and respective informers.
-    - For the three plugins: `TopologicalSort`, `NodeNetworkCostFit` and `NetworkMinCost`.
+    - For both CRs (AppGroup and NetworkTopology) concerning the controllers and respective informers.
+    - For the two plugins: `TopologicalSort` and `NetworkOverhead`.
 - Integration Tests
     - Default configurations (plugins enabled / disabled).
     - Impact of all plugins in the scheduling flow (performance, resource usage).
-    - Impact of both CRDs (AppGroup and NetworkTopology).
+    - Impact of both CRs (AppGroup and NetworkTopology).
 - End-to-end tests
     - Comprehensive E2E testing would graduate the framework from Alpha to Beta.
 
@@ -1434,15 +1472,15 @@ Unit tests and Integration tests will be added:
 
     Experiments are planned to evaluate the overhead of our design in different topologies. 
 
-    Nevertheless, it should be a negligible increase concerning execution time since our scoring plugin extracts topology information 
-    from the NetworkTopology CRD and application information from the AppGroup CRD.   
+    Nevertheless, it should be a negligible increase concerning execution time since our plugins extract 
+    topology information from the NetworkTopology CR and application information from the AppGroup CR.   
 
 *   Will enabling / using this feature result in non-negligible increase of resource usage (CPU, RAM, disk, IO, ...) in any components? 
 
-    No - Metrics / Information are available in both CRDs and only pulled by our plugins when needed. 
+    No - Metrics / Information are available in both CRs and only pulled by our plugins when needed. 
     It should be a negligible increase in terms of resource usage. 
     
-    Experiments are planned to evaluate the overhead of both CRDs and the AppGroup controller.  
+    Experiments are planned to evaluate the overhead of both CRs and the AppGroup controller.  
     
     In addition, the algorithms provided run in linear and logarithmic time for the number of nodes.
 
@@ -1467,8 +1505,7 @@ Unit tests and Integration tests will be added:
     - [ ]  The implementation of the AppGroup controller (AppGroup CRD).
     - [ ]  The development of the bandwidth resource component.
     - [ ]  The implementation of the `TopologicalSort` plugin.
-    - [ ]  The implementation of the `NodeNetworkCostFit` plugin.
-    - [ ]  The implementation of the `NetworkMinCost` plugin.
+    - [ ]  The implementation of the `NetworkOverhead` plugin.
     - [ ]  Unit tests and integration tests from Test plans.
 
 - Beta 
