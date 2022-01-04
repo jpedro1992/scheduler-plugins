@@ -395,8 +395,11 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 										Origin:      zone,
 										Destination:  zonePodHostname}] = value
 								} else {
-									klog.ErrorS(err, "[zones] Getting allocatable bandwidth from map...")
-									return
+									klog.Infof("[zones] Bandwidth allocatable not found in map... add 0.")
+									capacity := *resource.NewQuantity(0, resource.DecimalSI)
+									ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
+										Origin:      zone,
+										Destination:  zonePodHostname}] = capacity
 								}
 							}
 						} else { // belong to a different region
@@ -410,8 +413,12 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 									Origin:      region,
 									Destination:  regionPodHostname}] = value
 							} else {
-								klog.ErrorS(err, "[regions] Getting allocatable bandwidth from map...")
-								return
+								klog.Infof("[regions] Bandwidth allocatable not found in map... add 0.")
+								capacity := *resource.NewQuantity(0, resource.DecimalSI)
+
+								ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
+									Origin:      region,
+									Destination:  regionPodHostname}] = capacity
 							}
 						}
 					}
@@ -728,7 +735,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 						BandwidthAllocated: allocatable,
 						NetworkCost:        int64(cost),
 					}
-					klog.Infof("[Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
+					klog.Infof("OK [Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
 					costInfo = append(costInfo, info)
 				}else{
 					info := schedv1alpha1.CostInfo{
@@ -737,7 +744,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 						BandwidthAllocated: *resource.NewQuantity(0, resource.DecimalSI),
 						NetworkCost:        int64(cost),
 					}
-					klog.Infof("[Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
+					klog.Infof("Not OK [Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
 					costInfo = append(costInfo, info)
 				}
 			}
@@ -805,7 +812,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 							NetworkCost:        int64(cost),
 						}
 
-						klog.Infof("[Zone Costs] Origin %v - Destination %v - Cost: %v", z1, z2, info.NetworkCost)
+						klog.Infof("OK [Zone Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
 
 						costInfo = append(costInfo, info)
 					} else{
@@ -817,8 +824,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 								NetworkCost:        int64(cost),
 							}
 
-							klog.Infof("[Zone Costs] Origin %v - Destination %v - Cost: %v", z1, z2, info.NetworkCost)
-
+							klog.Infof("Not OK [Zone Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
 							costInfo = append(costInfo, info)
 						}
 					}
