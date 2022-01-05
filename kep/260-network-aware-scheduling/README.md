@@ -17,10 +17,9 @@
   - [The inclusion of bandwidth in the scheduling process](#the-inclusion-of-bandwidth-in-the-scheduling-process)
     - [Bandwidth Requests via extended resources](#bandwidth-requests-via-extended-resources)
     - [Bandwidth Limitations via the Bandwidth CNI plugin](#bandwidth-limitations-via-the-bandwidth-cni-plugin)
-  - [Plugins](#plugins)
-    - [Description of the `TopologicalSort`](#description-of-the-topologicalsort)
-    - [Description of the `NodeNetworkCostFit`](#description-of-the-nodenetworkcostfit)
-    - [Description of the `NetworkMinCost`](#description-of-the-networkmincost)
+  - [The Network-aware scheduling Plugins](#the-network-aware-scheduling-plugins)
+    - [Description of the `TopologicalSort` plugin](#description-of-the-topologicalsort-plugin)
+    - [Description of the `NetworkOverhead` plugin](#description-of-the-networkoverhead-plugin)
 - [Known limitations](#known-limitations)
 - [Test plans](#test-plans)
 - [Production Readiness Review Questionnaire](#production-readiness-review-questionnaire)
@@ -53,6 +52,7 @@ To tackle latency and bandwidth in the scheduling process, three plugins are pro
 - `TopologicalSort` (**QueueSort**).
 - `NodeNetworkCostFit` (**Filter**).
 - `NetworkMinCost` (**Score**).
+
 -->
 
 # Motivation
@@ -85,7 +85,7 @@ that implements a latency-aware scheduler extender based on the [scheduler exten
 
 ## Goals
 
-- Consider different pods as an Application via custom resources (**AppGroup CRD**).
+- Consider different workloads (e.g., pods) as an Application via custom resources (**AppGroup CRD**).
 - Define network weights between regions (`topology.kubernetes.io/region`) and zones (`topology.kubernetes.io/zone`) 
 in the cluster via custom resources (**NetworkTopology CRD**).
 - Advertise the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/).
@@ -121,12 +121,6 @@ Users are welcome to try plugins in this proposal with other plugins (e.g., `Req
 are preferred.
 
 ## Use cases / Topologies 
-
-<!-- previous version - EXTRA: 
-
-So, network latency and available bandwidths between nodes can vary according to their locations in the infrastructure.
-
--->
 
 ### 1 - Spark/Database applications running in Data centers or small scale cluster topologies
 
@@ -174,14 +168,9 @@ The proposal also presents a bandwidth resource component (DaemonSet) to adverti
 as **extended resources** to allow already available filter/scoring plugins (e.g., `PodFitsResources`, 
 `BalancedAlocation`) to consider bandwidth allocation.
 
-To tackle latency and bandwidth in the scheduling process, three plugins are proposed in this document: 
-- `TopologicalSort` (**QueueSort**).
-- `NodeNetworkCostFit` (**Filter**).
-- `NetworkMinCost` (**Score**).
-
 As an initial design, we plan to implement two plugins:  
 - A **QueueSort** function named `TopologicalSort` where pods are sorted based on their established dependencies.
-- A **Filter & Score** functions named `NetworkOverhead` where nodes are filtered out if they cannot support the 
+- A **Filter & Score** plugin named `NetworkOverhead` where nodes are filtered out if they cannot support the 
 network requirements of the Pod's AppGroup or scored based on network weights ensuring network latency is minimized for pods belonging to the same application.
 
 Further explanations are given below on how the proposed plugins interact with both CRDs. 
@@ -192,9 +181,7 @@ Further explanations are given below on how the proposed plugins interact with b
 
 We designed an AppGroup CRD for service chains based on the [Pod Group](https://github.com/kubernetes-sigs/scheduler-plugins/blob/master/kep/42-podgroup-coscheduling/README.md) concept introduced for the Co-scheduling plugin. 
 The PodGroup establishes a collection of pods of the same type, while the proposed AppGroup associates different workloads (e.g., pods) based on service topology information. 
-The AppGroup CRD also records current allocations (i.e., workload name, replica ID, hostname) under the status part. <!-- To remove? -->
-
-<!-- Add workloadRef! (name, apiVersion, and kind as its sub-fields) -->
+The AppGroup CRD also records current allocations (i.e., workload name, replica ID, hostname) under the status part. 
 
 ```yaml
 # App Group CRD spec
@@ -253,7 +240,20 @@ spec:
                   properties:
                     workloadName:
                       type: string
-                      description: Name of the workload.
+                      description: Name of the workload (e.g., label selector - app=MyApp).
+                    workloadRef: 
+                      items:
+                        description: Workload Reference (name, apiVersion, Kind)
+                        properties: 
+                          name: 
+                            description: Represents the name of the Object
+                            type: string
+                          apiVersion:
+                            description: APIVersion defines the versioned schema of an object. 
+                            type: string
+                          kind:
+                            description: Kind is a string value representing the REST resource.
+                            type: string
                     dependencies:
                       items:
                         description: DependenciesList establishes dependencies between workloads.
@@ -351,8 +351,6 @@ status:
 
 ### Example
 
-<!-- Add workloadRef! (name, apiVersion, and kind as its sub-fields) -->
-
 <p align="center"><img src="figs/chain.png" title="Chain" width="600" class="center"/></p>
 
 ```yaml
@@ -366,19 +364,31 @@ spec:
   topologySortingAlgorithm: KahnSort
   workloads: 
     - workloadName: P1 # Corresponds to the Kubernetes service (Label selector)
+      workloadRef: 
+        name: P1
+        apiVersion: apps/v1
+        kind: Pod
       dependencies:
         - workloadName: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 30
     - workloadName: P2
+      workloadRef: 
+        name: P2
+        apiVersion: apps/v1
+        kind: Pod
       dependencies:
         - workloadName: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
     - workloadName: P3
+      workloadRef: 
+        name: P3
+        apiVersion: apps/v1
+        kind: Pod
 ```
 
-An AppGroup controller updates the AppGroup CRD regarding the pods already scheduled in the cluster and the preferred topology order for pod allocations. 
+An AppGroup controller updates the AppGroup CR regarding the pods already scheduled in the cluster and the preferred topology order for pod allocations. 
 
 Currently, four algorithms are supported for topological sorting: 
 **[KahnSort](https://www.geeksforgeeks.org/topological-sorting-indegree-based-solution/),
@@ -433,22 +443,38 @@ type AppGroupSpec struct {
 	TopologySortingAlgorithm string `json:"topologySortingAlgorithm,omitempty" protobuf:"bytes,2,opt,name=topologySortingAlgorithm"`
 
 	// Workloads defines the workloads belonging to the Appgroup
-	Workloads AppGroupPodList `json:"workloads,omitempty" protobuf:"bytes,3,rep,name=workloads, casttype=AppGroupWorkloadList"`
-}
-
-// AppGroupWorkload represents the Workloads belonging to the App Group.
-// +protobuf=true
-type AppGroupWorkload struct {
-	// Name of the Service (Label Selector).
-	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
-
-	// Dependencies of the Workload.
-	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,rep,name=dependencies, casttype=DependenciesList"`
+	Workloads AppGroupWorkloadList `json:"workloads,omitempty" protobuf:"bytes,3,rep,name=workloads, casttype=AppGroupWorkloadList"`
 }
 
 // AppGroupWorkloadList contains an array of AppGroupWorkload objects.
 // +protobuf=true
 type AppGroupWorkloadList []AppGroupWorkload
+
+// AppGroupWorkload represents the Workloads belonging to the App Group.
+// +protobuf=true
+type AppGroupWorkload struct {
+	// Name of the Workload (Label Selector).
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
+
+    // Workload Reference
+    WorkloadRef AppGroupWorkloadRefInfo `json:"workloadRef,omitempty" protobuf:"bytes,2,opt,name=workloadRef, casttype=AppGroupWorkloadRefInfo"`
+
+	// Dependencies of the Workload.
+	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,3,rep,name=dependencies, casttype=DependenciesList"`
+}
+
+// AppGroupWorkloadRefInfo contains information about one workload.
+// +protobuf=true
+type AppGroupWorkloadRefInfo struct {
+	// Name represents the name of the Object
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+
+	// ApiVersion defines the versioned schema of an object.
+	ApiVersion string `json:"apiVersion,omitempty" protobuf:"bytes,2,opt,name=apiVersion"`
+
+	// Kind is a string value representing the REST resource.
+	Kind string `json:"kind,omitempty" protobuf:"bytes,3,opt,name=kind"`
+}
 
 // DependenciesInfo contains information about one dependency.
 // +protobuf=true
@@ -534,13 +560,13 @@ type AppGroupList struct {
 ### AppGroup Test based on Online Boutique
 
 In this test, an AppGroup is created for the [Online Boutique application](https://github.com/GoogleCloudPlatform/microservices-demo).
-It consists of 11 workloads each one representing a [Service](https://kubernetes.io/docs/concepts/services-networking/service/) corresponding to a group of Pods, which we named from P1 - P11. 
+It consists of 11 workloads each one corresponding to a group of Pods, which we named from P1 - P11. 
 
 <p align="center"><img src="figs/appGroupTestOnlineBoutique.png" title="appGroupTestOnlineBoutique" width="800" class="center"/></p>
 
-As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2. 
+As shown below, the preferred order for the KahnSort algorithm is P1, P10, P9, P8, P7, P6, P5, P4, P3, P2, P11. 
 
-We attribute an **index** to each workload to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort-queuesort).
+We attribute an **index** to each workload to evaluate their topology preference in the **Less function of the TopologicalSort plugin** described [here](#description-of-the-topologicalsort).
 The topology list corresponds to:
 
 ```go
@@ -993,9 +1019,9 @@ spec:
 
 This allows to perform filter / score algorithms based on bandwidth resources (e.g., `PodFitsHostResources`, `MostRequested`, `BalancedAllocation`).
 
-## Plugins
+## The Network-aware scheduling Plugins
 
-### Description of the `TopologicalSort`
+### Description of the `TopologicalSort` plugin
 
 **Extension point: QueueSort**
 
@@ -1055,11 +1081,11 @@ The plugin favors low indexes. Thus, depending on the two pods evaluated in the 
 <p align="center"><img src="figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
 
 
-### Description of the `NetworkOverhead` 
+### Description of the `NetworkOverhead` plugin
 
 #### Extension point: Filter 
 
-Workoad dependencies established in the AppGroup CRD must be respected.
+Workload dependencies established in the AppGroup CR must be respected.
 
 This plugin focuses on `maxNetworkCost` requirements. 
 
@@ -1165,16 +1191,28 @@ spec:
   topologySortingAlgorithm: KahnSort
   workloads:
     - workloadName: P1
+      workloadRef: 
+        name: P1
+        apiVersion: apps/v1
+        kind: Pod
       dependencies:
         - workloadName: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 15
     - workloadName: P2
+      workloadRef: 
+          name: P2
+          apiVersion: apps/v1
+          kind: Pod
       dependencies:
         - workloadName: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
     - workloadName: P3
+      workloadRef: 
+        name: P3
+        apiVersion: apps/v1
+        kind: Pod
 ```
 
 At a given moment, the status part is the following: 
@@ -1268,9 +1306,9 @@ So, nodes that do not respect its network cost requirement (i.e., `maxNetworkCos
 
 We propose a scoring function to favor nodes with the lowest combined network cost based on the pod's AppGroup.
 
-Workload allocations (workload name, replica id, hostname) are available in the AppGroup CRD updated by the controller. 
+Workload allocations (workload name, replica id, hostname) are available in the AppGroup CR updated by the controller. 
 
-Network weights among regions and zones in the cluster are available in the NetworkTopology CRD. 
+Network weights among regions and zones in the cluster are available in the NetworkTopology CR. 
  
 First, we check if pods are already running for the Pod's AppGroup. Otherwise, we score all candidate nodes equally.
 
