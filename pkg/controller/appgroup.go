@@ -308,8 +308,8 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 
-	} else if agCopy.Status.TopologyCalculationTime.Sub(ag.CreationTimestamp.Time) > 48*time.Hour {
-		klog.InfoS("Calculate Topology order... time over 48 hours")
+	} else if time.Now().Sub(ag.Status.TopologyCalculationTime.Time) > 24*time.Hour {
+		klog.InfoS("Recalculation of Topology Order... Every 24 hours...")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Pods, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)

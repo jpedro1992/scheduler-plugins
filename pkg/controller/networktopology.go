@@ -678,6 +678,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 
 	// Weights
 	ctrl.lock.Lock()
+
 	if ntCopy.Status.WeightCalculationTime.IsZero() {
 		klog.InfoS("Initial Calculation of Weight List...")
 
@@ -718,8 +719,8 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 
 		ntCopy.Status.WeightCalculationTime = metav1.Time{Time: time.Now()}
 
-	} else if ntCopy.Status.WeightCalculationTime.Sub(nt.CreationTimestamp.Time) > 15*time.Minute {
-		klog.InfoS("Calculation of Weight List... Time over 48h...")
+	} else if time.Now().Sub(ntCopy.Status.WeightCalculationTime.Time) > 5*time.Minute {
+		klog.InfoS("Recalculation of Weight List... Every 5 min...")
 		var manualRegionCosts schedv1alpha1.CostList
 		var manualZoneCosts schedv1alpha1.CostList
 
@@ -753,7 +754,6 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 
 		ntCopy.Spec.Weights = weights
 		ntCopy.Status.WeightCalculationTime = metav1.Time{Time: time.Now()}
-
 	}
 
 	ctrl.lock.Unlock()
@@ -764,7 +764,6 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		ctrl.ntQueue.Forget(nt)
 	}
 	return err
-
 }
 
 func (ctrl *NetworkTopologyController) patchNetworkTopology(old, new *schedv1alpha1.NetworkTopology) error {
@@ -785,7 +784,7 @@ func (ctrl *NetworkTopologyController) patchNetworkTopology(old, new *schedv1alp
 
 // Update the weights based on latency measurements saved in the configmap
 func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v1.ConfigMap) error {
-	klog.V(5).InfoS("NetworkTopology SyncHandler: Update costs in the network graph... ")
+	klog.InfoS("NetworkTopology SyncHandler: Update costs in the network graph... ")
 
 	// Rebuild the graph
 	ctrl.regionGraph = util.NewGraph()
@@ -802,7 +801,7 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 				r2 := networkAwareUtil.GetNodeRegion(n2)
 				z2 := networkAwareUtil.GetNodeZone(n2)
 
-				klog.Infof("N1: %v - N2: %v - RegionN1: %v - RegionN2: %v - ZoneN1: %v - ZoneN2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
+				klog.V(5).Infof("N1: %v - N2: %v - Region1: %v - Region2: %v - Zone1: %v - Zone2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
 
 				// get cost from configmap
 				key := util.GetConfigmapCostQuery(n1.Name, n2.Name)
@@ -815,7 +814,7 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 					klog.ErrorS(err, "Error converting cost...")
 				}
 
-				klog.Infof("Cost: %v", cost)
+				klog.V(5).Infof("Cost: %v", cost)
 
 				// Update Cost in the graph
 				ctrl.nodeGraph.AddEdge(n1.Name, n2.Name, cost)
@@ -861,7 +860,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 		}
 	}
 
-	klog.Infof("Regions %v ", regions)
+	klog.Infof("[getRegionWeights] Regions %v ", regions)
 
 	for _, r1 := range regions {
 		// init vars
@@ -878,7 +877,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 
 				originCosts := networkAwareUtil.FindOriginCosts(manualCosts, r1)
 
-				klog.Infof("[Region Costs] originCosts: %v", originCosts)
+				klog.Infof("[getRegionWeights] originCosts: %v", originCosts)
 
 				bandwidthCapacity := *resource.NewScaledQuantity(1, resource.Giga)
 
@@ -888,12 +887,12 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 
 					bandwidthCapacity= networkAwareUtil.FindOriginBandwidthCapacity(originCosts, r2)
 
-					klog.Infof("[Zone Costs] Bandwidth Capacity: %v", bandwidthCapacity)
-
 					if bandwidthCapacity == resource.MustParse("0"){
 						bandwidthCapacity = *resource.NewScaledQuantity(1, resource.Giga)
 					}
 				}
+
+				klog.Infof("[getRegionWeights] Bandwidth Capacity: %v", bandwidthCapacity)
 
 				if ok {
 					info := schedv1alpha1.CostInfo{
@@ -902,7 +901,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 						BandwidthAllocated: allocatable,
 						NetworkCost:        int64(cost),
 					}
-					klog.Infof("OK [Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
+					klog.Infof("[getRegionWeights] OK: Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
 					costInfo = append(costInfo, info)
 				}else{
 					info := schedv1alpha1.CostInfo{
@@ -911,7 +910,7 @@ func getRegionWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualC
 						BandwidthAllocated: *resource.NewQuantity(0, resource.DecimalSI), // consider as zero
 						NetworkCost:        int64(cost),
 					}
-					klog.Infof("Not OK [Region Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
+					klog.Infof("[getRegionWeights] Bandwidth allocatable Not found: Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
 					costInfo = append(costInfo, info)
 				}
 			}
@@ -943,7 +942,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 		}
 	}
 
-	klog.Infof("Zones %v ", zones)
+	klog.Infof("[getZoneWeights] Zones %v ", zones)
 
 	for _, z1 := range zones {
 		// init vars
@@ -956,24 +955,19 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 					Z2: z2,
 				}]
 
-				klog.Infof("[Zone Costs] z1: %v, z2: %v", z1, z2)
+				klog.Infof("[getZoneWeights] z1: %v, z2: %v", z1, z2)
 
 				if ok && value {
-					klog.Infof("[Zone Costs] OK and value")
 					cost, _ := ctrl.zoneGraph.GetPath(z1, z2)
-
-					klog.Infof("[Zone Costs] cost: %v", cost)
 
 					allocatable, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
 						Origin:      z1,
 						Destination: z2,
 					}]
 
-					klog.Infof("[Zone Costs] allocatable: %v", allocatable)
-
 					originCosts := networkAwareUtil.FindOriginCosts(manualCosts, z1)
 
-					klog.Infof("[Zone Costs] originCosts: %v", originCosts)
+					klog.Infof("[getZoneWeights] originCosts: %v", originCosts)
 
 					bandwidthCapacity := *resource.NewScaledQuantity(1, resource.Giga)
 
@@ -988,7 +982,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 						}
 					}
 
-					klog.Infof("[Zone Costs] Bandwidth Capacity: %v", bandwidthCapacity)
+					klog.Infof("[getZoneWeights] Bandwidth Capacity: %v", bandwidthCapacity)
 
 					if ok {
 						info := schedv1alpha1.CostInfo{
@@ -998,7 +992,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 							NetworkCost:        int64(cost),
 						}
 
-						klog.Infof("OK [Zone Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
+						klog.Infof("[getZoneWeights] OK: Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
 
 						costInfo = append(costInfo, info)
 					} else{
@@ -1009,7 +1003,7 @@ func getZoneWeights(ctrl *NetworkTopologyController, nodes []*v1.Node, manualCos
 							NetworkCost:        int64(cost),
 						}
 
-						klog.Infof("Not OK [Zone Costs] Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
+						klog.Infof("[getZoneWeights] Bandwidth Allocatable not found: Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
 						costInfo = append(costInfo, info)
 					}
 				}
