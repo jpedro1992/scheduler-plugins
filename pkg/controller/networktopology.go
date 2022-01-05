@@ -367,7 +367,7 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 			for _, d := range dependencyList { // For each pod dependency
 				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
 					if podAllocated.Hostname == pod.Spec.NodeName { // If the pod's hostname is the same
-						return
+						klog.Info("[Pod added] Same Hostname do nothing for this dependency... ")
 					} else { // If Nodes are not the same
 						// Get NodeInfo from pod Hostname
 						podHostname, err := ctrl.nodeLister.Get(podAllocated.Hostname)
@@ -380,10 +380,10 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname)
 
 						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
-							return
+							klog.Info("[Pod added] Null region/zone do nothing for this dependency... ")
 						} else if region == regionPodHostname { // If Nodes belong to the same region
 							if zone == zonePodHostname { // If Nodes belong to the same zone
-								return
+								klog.Info("[Pod added] Same Zone do nothing for this dependency... ")
 							} else { // belong to a different zone
 								value, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
 									Origin:      zone,
@@ -433,10 +433,157 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 
 // podDeleted reacts to a pod delete
 func (ctrl *NetworkTopologyController) podDeleted(obj interface{}) {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		klog.Error("unexpected object type in pod deleted")
+		return
+	}
+
 	_, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		runtime.HandleError(err)
 		return
+	}
+
+	agName := util.GetAppGroupLabel(pod)
+	if len(agName) == 0 {
+		return
+	}
+
+	ag, err := ctrl.agLister.AppGroups(pod.Namespace).Get(agName)
+	if err != nil {
+		klog.ErrorS(err, "Error retrieving AppGroup...")
+		return
+	}
+
+	klog.V(5).InfoS("[Pod deleted] Pod's App group: ", "AppGroup", klog.KObj(ag), "pod", klog.KObj(pod))
+
+	// Check Dependencies of the given pod
+	var dependencyList []schedv1alpha1.DependenciesInfo
+	ls := pod.GetLabels()
+	for _, p := range ag.Spec.Pods {
+		if p.PodName == ls[util.DeploymentLabel] {
+			for _, dependency := range p.Dependencies {
+				dependencyList = append(dependencyList, dependency)
+			}
+		}
+	}
+
+	klog.V(5).Info("[Pod deleted] dependencyList: ", dependencyList)
+
+	// If the pod has no dependencies, return
+	if dependencyList == nil {
+		return
+	}
+
+	// Get pods from lister
+	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
+	pods, err := ctrl.podLister.List(selector)
+	if err != nil {
+		klog.ErrorS(err, "[Pod deleted] Getting deployed pods from lister...")
+		return
+	}
+
+	// No pods yet allocated...
+	if pods == nil{
+		return
+	}
+
+	// Pods already scheduled: Deployment name, replicaID, hostname
+	scheduledList := schedv1alpha1.ScheduledList{}
+
+	for _, p := range pods {
+		if networkAwareUtil.AssignedPod(p) {
+			scheduledInfo := schedv1alpha1.ScheduledInfo{
+				PodName:   util.GetDeploymentName(p),
+				ReplicaID: string(p.GetUID()),
+				Hostname:  p.Spec.NodeName,
+			}
+			scheduledList = append(scheduledList, scheduledInfo)
+		}
+	}
+
+	// Check if pods already available
+	if scheduledList == nil{
+		return
+	}
+
+	// Get Node from pod.Spec.Nodename
+	hostname, err := ctrl.nodeLister.Get(pod.Spec.NodeName)
+	if err != nil {
+		klog.ErrorS(err, "[Pod deleted] Getting pod hostname from nodeLister...")
+		return
+	}
+
+	// Retrieve Region and Zone from node
+	region := networkAwareUtil.GetNodeRegion(hostname)
+	zone := networkAwareUtil.GetNodeZone(hostname)
+
+	// delete reserved bandwidth
+	for _, podAllocated := range scheduledList { // For each pod already allocated
+		if podAllocated.Hostname != "" { // if already updated by the controller
+			for _, d := range dependencyList { // For each pod dependency
+				if podAllocated.PodName == d.PodName { // If the pod allocated is an established dependency
+					if podAllocated.Hostname == pod.Spec.NodeName { // If the pod's hostname is the same
+						klog.Info("[Pod deleted] Same hostname do nothing for this dependency... ")
+					} else { // If Nodes are not the same
+						// Get NodeInfo from pod Hostname
+						podHostname, err := ctrl.nodeLister.Get(podAllocated.Hostname)
+						if err != nil {
+							klog.ErrorS(err, "Getting pod hostname from nodeLister...")
+							return
+						}
+						// Get zone and region from Pod Hostname
+						regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname)
+						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname)
+
+						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
+							klog.Info("[Pod deleted] Null region/zone do nothing for this dependency... ")
+						} else if region == regionPodHostname { // If Nodes belong to the same region
+							if zone == zonePodHostname { // If Nodes belong to the same zone
+								klog.Info("[Pod deleted] Same Zone do nothing for this dependency... ")
+							} else { // belong to a different zone
+								value, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
+									Origin:      zone,
+									Destination: zonePodHostname,
+								}]
+								if ok {
+									value.Sub(d.MinBandwidth)
+									ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
+										Origin:      zone,
+										Destination: zonePodHostname}] = value
+								} else {
+									klog.Infof("[zones] Bandwidth allocatable not found in map... add 0")
+									capacity := *resource.NewQuantity(0, resource.DecimalSI)
+
+									ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
+										Origin:      zone,
+										Destination: zonePodHostname}] = capacity
+								}
+							}
+						} else { // belong to a different region
+							value, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocable bandwidth from the map (origin: region, destination: pod regionHostname)
+								Origin:      region,
+								Destination: regionPodHostname,
+							}]
+							if ok {
+								value.Sub(d.MinBandwidth)
+								ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
+									Origin:      region,
+									Destination: regionPodHostname}] = value
+							} else {
+								klog.Infof("[regions] Bandwidth allocatable not found in map... add 0")
+								capacity := *resource.NewQuantity(0, resource.DecimalSI)
+
+								ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
+									Origin:      region,
+									Destination: regionPodHostname}] = capacity
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 	ctrl.podAdded(obj)
 }
