@@ -153,3 +153,39 @@ type NodeResourceTopologyMatchArgs struct {
 
 // PreemptionTolerationArgs reuses DefaultPluginArgs.
 type PreemptionTolerationArgs unversioned.DefaultPreemptionArgs
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type TopologicalSortArgs struct {
+	metav1.TypeMeta
+
+	// KubeConfigPath is the path of kubeconfig.
+	KubeConfigPath string
+
+	// MasterOverride is the url of api-server
+	MasterOverride string
+
+	// Namespaces to be considered by TopologySort plugin
+	Namespaces []string
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type NetworkOverheadArgs struct {
+	metav1.TypeMeta
+
+	// KubeConfigPath is the path of kubeconfig.
+	KubeConfigPath string
+
+	// MasterOverride is the url of api-server
+	MasterOverride string
+
+	// Namespaces to be considered by NetworkMinCost plugin
+	Namespaces []string
+
+	// Preferred weights (Default: UserDefined)
+	WeightsName string
+
+	// The NetworkTopology CRD name
+	NetworkTopologyName string
+}

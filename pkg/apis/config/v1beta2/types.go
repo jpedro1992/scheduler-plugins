@@ -149,3 +149,41 @@ type NodeResourceTopologyMatchArgs struct {
 
 // PreemptionTolerationArgs reuses DefaultPluginArgs.
 type PreemptionTolerationArgs schedulerconfigv1beta2.DefaultPreemptionArgs
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:defaulter-gen=true
+
+type TopologicalSortArgs struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// KubeConfigPath is the path of kubeconfig.
+	KubeConfigPath *string `json:"kubeConfigPath,omitempty"`
+
+	// MasterOverride is the url of api-server
+	MasterOverride *string `json:"masterOverride,omitempty"`
+
+	// Namespaces to be considered by TopologySort plugin
+	Namespaces []string `json:"namespaces,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:defaulter-gen=true
+
+type NetworkOverheadArgs struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// KubeConfigPath is the path of kubeconfig.
+	KubeConfigPath *string `json:"kubeConfigPath,omitempty"`
+
+	// MasterOverride is the url of api-server
+	MasterOverride *string  `json:"masterOverride,omitempty"`
+
+	// Namespaces to be considered by NetworkMinCost plugin
+	Namespaces []string `json:"namespaces,omitempty"`
+
+	// Preferred weights (Default: UserDefined)
+	WeightsName *string `json:"weightsName,omitempty"`
+
+	// The NetworkTopology CRD name
+	NetworkTopologyName *string `json:"networkTopologyName,omitempty"`
+}

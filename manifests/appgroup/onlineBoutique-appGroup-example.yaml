@@ -1,0 +1,114 @@
+apiVersion: scheduling.sigs.k8s.io/v1alpha1
+kind: AppGroup
+metadata:
+  name: online-boutique
+spec:
+  numMembers: 11
+  topologySortingAlgorithm: AlternateKahn
+  workloads:
+    - workloadName: frontend
+      dependencies:
+        - workloadName: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: productcatalogservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: currencyservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: shippingservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: adservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: cartservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: redis-cart
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: productcatalogservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: recommendationservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: currencyservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: paymentservice
+      dependencies:
+        - workloadName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: shippingservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: emailservice
+      dependencies:
+        - workloadName: checkoutservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: checkoutservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: productcatalogservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: currencyservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: paymentservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: shippingservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: emailservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: recommendationservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+        - workloadName: productcatalogservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: adservice
+      dependencies:
+        - workloadName: frontend
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: redis-cart
+      dependencies:
+        - workloadName: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80

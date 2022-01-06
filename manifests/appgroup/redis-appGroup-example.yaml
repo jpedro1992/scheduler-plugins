@@ -1,0 +1,14 @@
+apiVersion: scheduling.sigs.k8s.io/v1alpha1
+kind: AppGroup
+metadata:
+  name: redis-cluster
+spec:
+  numMembers: 2
+  topologySortingAlgorithm: AlternateKahn
+  workloads:
+    - workloadName: redis-leader
+      dependencies:
+        - workloadName: redis-follower
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workloadName: redis-follower

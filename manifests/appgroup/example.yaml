@@ -1,0 +1,19 @@
+apiVersion: scheduling.sigs.k8s.io/v1alpha1
+kind: AppGroup
+metadata:
+  name: a1
+spec:
+  numMembers: 3
+  topologySortingAlgorithm: KahnSort
+  workloads:
+    - workloadName: P1
+      dependencies:
+        - workloadName: P2
+          minBandwidth: "100Mi"
+          maxNetworkCost: 30
+    - workloadName: P2
+      dependencies:
+        - workloadName: P3
+          minBandwidth: "250Mi"
+          maxNetworkCost: 20
+    - workloadName: P3

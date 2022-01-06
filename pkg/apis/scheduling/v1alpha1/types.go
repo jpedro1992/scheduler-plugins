@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -185,4 +186,234 @@ type PodGroupList struct {
 
 	// Items is the list of PodGroup
 	Items []PodGroup `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AppGroup is a collection of Pods belonging to the same application
+type AppGroup struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// Standard object's metadata.
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// AppGroupSpec defines the Min and Max for Quota.
+	// +optional
+	Spec AppGroupSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+
+	// AppGroupStatus defines the observed use.
+	// +optional
+	Status AppGroupStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+}
+
+// AppGroupSpec represents the template of a app group.
+type AppGroupSpec struct {
+	// NumMembers defines the number of Pods belonging to the App Group
+	NumMembers int32 `json:"numMembers,omitempty" protobuf:"bytes,1,opt,name=numMembers"`
+
+	// The preferred Topology Sorting Algorithm
+	TopologySortingAlgorithm string `json:"topologySortingAlgorithm,omitempty" protobuf:"bytes,2,opt,name=topologySortingAlgorithm"`
+
+	// Workloads defines the workloads belonging to the group
+	Workloads AppGroupWorkloadList `json:"workloads,omitempty" protobuf:"bytes,3,rep,name=workloads, casttype=AppGroupWorkloadList"`
+}
+
+// AppGroupWorkload represents the workloads (e.g., Pods) belonging to the App Group.
+// +protobuf=true
+type AppGroupWorkload struct {
+	// Name of the Workload.
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
+
+	// Dependencies of the Workload.
+	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,rep,name=dependencies, casttype=DependenciesList"`
+}
+
+// AppGroupPodList contains an array of Pod objects.
+// +protobuf=true
+type AppGroupWorkloadList []AppGroupWorkload
+
+// DependenciesInfo contains information about one dependency.
+// +protobuf=true
+type DependenciesInfo struct {
+	// Name of the Workload.
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
+
+	// MinBandwidth between workloads
+	// +optional
+	MinBandwidth resource.Quantity `json:"minBandwidth,omitempty" protobuf:"bytes,2,opt,name=minBandwidth"`
+
+	// Max Network Cost between workloads
+	// +optional
+	MaxNetworkCost int64 `json:"maxNetworkCost,omitempty" protobuf:"bytes,3,opt,name=maxNetworkCost"`
+}
+
+// DependenciesList contains an array of ResourceInfo objects.
+// +protobuf=true
+type DependenciesList []DependenciesInfo
+
+// AppGroupStatus represents the current state of a app group.
+type AppGroupStatus struct {
+	// The number of actively running workloads (e.g., number of pods).
+	// +optional
+	RunningWorkloads int32 `json:"runningWorkloads,omitempty" protobuf:"bytes,1,opt,name=runningWorkloads"`
+
+	// Scheduled defines current allocations (workload name, Pod instance id, hostname).
+	// +optional
+	Scheduled ScheduledList `json:"podsScheduled,omitempty" protobuf:"bytes,2,rep,name=scheduled,casttype=ScheduledList"`
+
+	// ScheduleStartTime of the group
+	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty" protobuf:"bytes,3,opt,name=scheduleStartTime"`
+
+	// TopologyCalculationTime of the group
+	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty" protobuf:"bytes,4,opt,name=topologyCalculationTime"`
+
+	// Topology order for TopSort plugin (QueueSort)
+	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,5,rep,name=topologyOrder,casttype=TopologyList"`
+}
+
+// ScheduledInfo represents the Affinities of a given Workload
+// +protobuf=true
+type ScheduledInfo struct {
+	// Workload Name
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
+
+	// Replica ID
+	ReplicaID string `json:"replicaID,omitempty" protobuf:"bytes,2,opt,name=replicaID"`
+
+	// Hostname
+	Hostname string `json:"hostname,omitempty" protobuf:"bytes,3,opt,name=hostname"`
+}
+
+// ScheduledList contains an array of Workload Affinities.
+// +protobuf=true
+type ScheduledList []ScheduledInfo
+
+// TopologyInfo represents the calculated order for the given AppGroup
+// +protobuf=true
+type TopologyInfo struct {
+	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
+	Index   int32  `json:"index,omitempty" protobuf:"bytes,2,opt,name=index"`
+}
+
+// TopologyList contains an array of workload indexes for the TopologySorting plugin.
+// +protobuf=true
+type TopologyList []TopologyInfo
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AppGroupList is a collection of app groups.
+type AppGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// Items is the list of AppGroup
+	Items []AppGroup `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkTopology defines network costs in the cluster between regions and zones
+type NetworkTopology struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// Standard object's metadata.
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// NetworkTopologySpec defines the Min and Max for Quota.
+	// +optional
+	Spec NetworkTopologySpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+
+	// NetworkTopologyStatus defines the observed use.
+	// +optional
+	Status NetworkTopologyStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
+}
+
+// NetworkTopologySpec represents the template of a NetworkTopology.
+type NetworkTopologySpec struct {
+	// The manual defined weights of the cluster
+	Weights WeightList `json:"weights,omitempty" protobuf:"bytes,1,rep,name=weights,casttype=WeightList"`
+
+	// ConfigmapName to be used for cost calculation
+	ConfigmapName string `json:"configmapName,omitempty" protobuf:"bytes,2,opt,name=configmapName"`
+}
+
+// NetworkTopologyStatus represents the current state of a Network Topology.
+type NetworkTopologyStatus struct {
+	// The total number of nodes in the cluster
+	NodeCount int64 `json:"nodeCount,omitempty" protobuf:"bytes,1,opt,name=nodeCount"`
+
+	// The calculation time for the weights in the network topology CRD
+	WeightCalculationTime metav1.Time `json:"weightCalculationTime,omitempty" protobuf:"bytes,2,opt,name=weightCalculationTime"`
+
+	// The calculated weights in the topology.
+	// +optional
+	// Weights WeightList `json:"weightList,omitempty"`
+}
+
+// WeightList contains an array of WeightInfo objects.
+// +protobuf=true
+type WeightList []WeightInfo
+
+// CostList contains an array of OriginInfo objects.
+// +protobuf=true
+type CostList []OriginInfo
+
+// WeightInfo contains information about all network costs for a given algorithm.
+// +protobuf=true
+type WeightInfo struct {
+	// Algorithm Name for network cost calculation (e.g., userDefined)
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+
+	// Costs between regions
+	RegionCostList CostList `json:"regionCostList,omitempty" protobuf:"bytes,2,rep,name=regionCostList,casttype=CostList"`
+
+	// Costs between zones
+	ZoneCostList CostList `json:"zoneCostList,omitempty" protobuf:"bytes,3,rep,name=zoneCostList,casttype=CostList"`
+}
+
+// OriginInfo contains information about network costs for a particular Origin.
+// +protobuf=true
+type OriginInfo struct {
+	// Name of the origin (e.g., Region Name, Zone Name).
+	Origin string `json:"origin,omitempty" protobuf:"bytes,1,opt,name=origin"`
+
+	// Costs for the particular origin.
+	Costs []CostInfo `json:"costs,omitempty" protobuf:"bytes,2,rep,name=costs,casttype=CostInfo"`
+}
+
+// CostInfo contains information about networkCosts.
+// +protobuf=true
+type CostInfo struct {
+	// Name of the destination (e.g., Region Name, Zone Name).
+	Destination string `json:"destination,omitempty" protobuf:"bytes,1,opt,name=destination"`
+
+	// Bandwidth capacity between origin and destination.
+	// +optional
+	BandwidthCapacity resource.Quantity `json:"bandwidthCapacity,omitempty" protobuf:"bytes,2,opt,name=bandwidthCapacity"`
+
+	// Bandwidth allocated between origin and destination.
+	// +optional
+	BandwidthAllocated resource.Quantity `json:"bandwidthAllocated,omitempty" protobuf:"bytes,3,opt,name=bandwidthAllocated"`
+
+	// Network Cost between origin and destination (e.g., Dijkstra shortest path, etc)
+	NetworkCost int64 `json:"networkCost,omitempty" protobuf:"bytes,4,opt,name=networkCost"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkTopologyList is a collection of netTopologies.
+type NetworkTopologyList struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard list metadata
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	// Items is the list of AppGroup
+	Items []NetworkTopology `json:"items"`
 }

@@ -20,7 +20,7 @@ package v1beta1
 
 import (
 	"strconv"
-
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	schedulerconfig "k8s.io/kube-scheduler/config/v1"
@@ -72,6 +72,9 @@ var (
 		{Name: string(v1.ResourceCPU), Weight: 1},
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
+
+	defaultWeightsName string = "UserDefined"
+	defaultNetworkTopologyName string = "nt-default"
 )
 
 // SetDefaultsCoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -147,5 +150,33 @@ func SetDefaultsNodeResourceTopologyMatchArgs(obj *NodeResourceTopologyMatchArgs
 		if obj.ScoringStrategy.Resources[i].Weight == 0 {
 			obj.ScoringStrategy.Resources[i].Weight = 1
 		}
+	}
+}
+
+// SetDefaultsTopologicalSortArgs sets the default parameters for TopologicalSortArgs plugin.
+func SetDefaultsTopologicalSortArgs(obj *TopologicalSortArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+}
+
+// SetDefaultsNetworkMinCostArgs sets the default parameters for NetworkMinCostArgs plugin.
+func SetDefaultsNetworkMinCostArgs(obj *NetworkOverheadArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+
+	if obj.WeightsName == nil {
+		obj.WeightsName = &defaultWeightsName
+	}
+
+	if obj.NetworkTopologyName == nil {
+		obj.NetworkTopologyName = &defaultNetworkTopologyName
 	}
 }

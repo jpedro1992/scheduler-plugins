@@ -19,6 +19,7 @@ limitations under the License.
 package v1beta2
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strconv"
 
 	v1 "k8s.io/api/core/v1"
@@ -72,6 +73,10 @@ var (
 		{Name: string(v1.ResourceCPU), Weight: 1},
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
+
+	defaultKubeConfigPath string = "/etc/kubernetes/scheduler.conf"
+	defaultWeightsName string = "UserDefined"
+	defaultNetworkTopologyName string = "nt-default"
 )
 
 // SetDefaultsCoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -149,4 +154,32 @@ func SetDefaultsNodeResourceTopologyMatchArgs(obj *NodeResourceTopologyMatchArgs
 // PreemptionTolerationArgs reuses SetDefaults_DefaultPreemptionArgs
 func SetDefaultsPreemptionTolerationArgs(obj *PreemptionTolerationArgs) {
 	k8sschedulerconfigv1beta2.SetDefaults_DefaultPreemptionArgs((*schedulerconfigv1beta2.DefaultPreemptionArgs)(obj))
+}
+
+// SetDefaultsTopologicalSortArgs sets the default parameters for TopologicalSortArgs plugin.
+func SetDefaultsTopologicalSortArgs(obj *TopologicalSortArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+}
+
+// SetDefaultsNetworkMinCostArgs sets the default parameters for NetworkMinCostArgs plugin.
+func SetDefaultsNetworkMinCostArgs(obj *NetworkOverheadArgs) {
+	if obj.KubeConfigPath == nil {
+		obj.KubeConfigPath = &defaultKubeConfigPath
+	}
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+
+	if obj.WeightsName == nil {
+		obj.WeightsName = &defaultWeightsName
+	}
+
+	if obj.NetworkTopologyName == nil {
+		obj.NetworkTopologyName = &defaultNetworkTopologyName
+	}
 }
