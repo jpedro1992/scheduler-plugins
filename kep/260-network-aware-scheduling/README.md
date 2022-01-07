@@ -453,10 +453,10 @@ type AppGroupWorkload struct {
 	// Name of the Workload (Label Selector).
 	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 
-    // Workload Reference
+    // Workload Reference 
     WorkloadRef AppGroupWorkloadRefInfo `json:"workloadRef,omitempty" protobuf:"bytes,2,opt,name=workloadRef, casttype=AppGroupWorkloadRefInfo"`
 
-	// Dependencies of the Workload.
+	// Dependencies of the Workload. 
 	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,3,rep,name=dependencies, casttype=DependenciesList"`
 }
 
