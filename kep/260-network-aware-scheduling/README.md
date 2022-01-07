@@ -463,15 +463,14 @@ type AppGroupWorkload struct {
 // AppGroupWorkloadRefInfo contains information about one workload.
 // +protobuf=true
 type AppGroupWorkloadRefInfo struct {
-
-    // Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
-    Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+    // Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds" 
+	Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
 
 	// Name represents the workload, info: http://kubernetes.io/docs/user-guide/identifiers#names
 	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
 
-	// ApiVersion defines the versioned schema of an object.
-    // +optional
+	// ApiVersion defines the versioned schema of an object. 
+	//+optional 
 	APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,3,opt,name=apiVersion"`
 }
 
