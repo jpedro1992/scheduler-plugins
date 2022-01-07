@@ -244,15 +244,15 @@ spec:
                     workloadRef: 
                       items:
                         description: Workload Reference (name, apiVersion, Kind)
-                        properties: 
+                        properties:
+                          kind:
+                            description: Kind is a string value representing the REST resource.
+                            type: string 
                           name: 
                             description: Represents the name of the Object
                             type: string
                           apiVersion:
                             description: APIVersion defines the versioned schema of an object. 
-                            type: string
-                          kind:
-                            description: Kind is a string value representing the REST resource.
                             type: string
                     dependencies:
                       items:
@@ -365,27 +365,24 @@ spec:
   workloads: 
     - workloadName: P1 # Corresponds to the Kubernetes service (Label selector)
       workloadRef: 
-        name: P1
-        apiVersion: apps/v1
         kind: Pod
+        name: P1
       dependencies:
         - workloadName: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 30
     - workloadName: P2
       workloadRef: 
-        name: P2
-        apiVersion: apps/v1
         kind: Pod
+        name: P2
       dependencies:
         - workloadName: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
     - workloadName: P3
       workloadRef: 
-        name: P3
-        apiVersion: apps/v1
         kind: Pod
+        name: P3
 ```
 
 An AppGroup controller updates the AppGroup CR regarding the pods already scheduled in the cluster and the preferred topology order for pod allocations. 
@@ -466,14 +463,16 @@ type AppGroupWorkload struct {
 // AppGroupWorkloadRefInfo contains information about one workload.
 // +protobuf=true
 type AppGroupWorkloadRefInfo struct {
-	// Name represents the name of the Object
-	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+
+    // Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
+    Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+
+	// Name represents the workload, info: http://kubernetes.io/docs/user-guide/identifiers#names
+	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
 
 	// ApiVersion defines the versioned schema of an object.
-	ApiVersion string `json:"apiVersion,omitempty" protobuf:"bytes,2,opt,name=apiVersion"`
-
-	// Kind is a string value representing the REST resource.
-	Kind string `json:"kind,omitempty" protobuf:"bytes,3,opt,name=kind"`
+    // +optional
+	APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,3,opt,name=apiVersion"`
 }
 
 // DependenciesInfo contains information about one dependency.
@@ -1192,27 +1191,24 @@ spec:
   workloads:
     - workloadName: P1
       workloadRef: 
+        kind: Pod 
         name: P1
-        apiVersion: apps/v1
-        kind: Pod
       dependencies:
         - workloadName: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 15
     - workloadName: P2
       workloadRef: 
-          name: P2
-          apiVersion: apps/v1
           kind: Pod
+          name: P2
       dependencies:
         - workloadName: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
     - workloadName: P3
-      workloadRef: 
+      workloadRef:
+        kind: Pod 
         name: P3
-        apiVersion: apps/v1
-        kind: Pod
 ```
 
 At a given moment, the status part is the following: 
@@ -1297,8 +1293,6 @@ Now, let's consider that we need to schedule one pod corresponding to the worklo
 `P2` is an established dependency of `P1`. 
 
 So, nodes that do not respect its network cost requirement (i.e., `maxNetworkCost: 15`) will be filtered out:
-
-<!-- change example! (Workload, remove pod) -->
 
 <p align="center"><img src="figs/filterExample.png" title="filterExample" width="600" class="center"/></p>
 
@@ -1450,8 +1444,6 @@ After filtering nodes with the `NetworkOverhead` plugin, four nodes remain as ca
 
 Nodes with the lowest combined network costs will be scored higher: 
 
-<!-- change example! (Workload, remove pod) -->
-
 <p align="center"><img src="figs/scoreExample.png" title="scoreExample" width="800" class="center"/></p>
 
 # Known limitations
@@ -1555,3 +1547,4 @@ Unit tests and Integration tests will be added:
 - 2021-9-9: Presentation to the Kubernetes sig-scheduling community. 
 Received feedback and comments on the design and implementation. Recording available [here](https://youtu.be/D9jSqUiaq1Q). 
 - 2021-11-4: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
+<!-- - 2022-01-14: KEP v0.1 sent out for review after receiving feedback on the initial KEP. -->
