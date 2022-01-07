@@ -453,8 +453,8 @@ type AppGroupWorkload struct {
 	// Name of the Workload (Label Selector).
 	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 
-    // Workload Reference 
-    WorkloadRef AppGroupWorkloadRefInfo `json:"workloadRef,omitempty" protobuf:"bytes,2,opt,name=workloadRef, casttype=AppGroupWorkloadRefInfo"`
+	// Workload Reference 
+	WorkloadRef AppGroupWorkloadRefInfo `json:"workloadRef,omitempty" protobuf:"bytes,2,opt,name=workloadRef, casttype=AppGroupWorkloadRefInfo"`
 
 	// Dependencies of the Workload. 
 	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,3,rep,name=dependencies, casttype=DependenciesList"`
@@ -463,7 +463,7 @@ type AppGroupWorkload struct {
 // AppGroupWorkloadRefInfo contains information about one workload.
 // +protobuf=true
 type AppGroupWorkloadRefInfo struct {
-    // Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds" 
+	// Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds" 
 	Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
 
 	// Name represents the workload, info: http://kubernetes.io/docs/user-guide/identifiers#names
