@@ -86,13 +86,12 @@ that implements a latency-aware scheduler extender based on the [scheduler exten
 
 ## Goals
 
-- Consider different workloads (e.g., pods) as an Application via custom resources (**AppGroup CRD**).
-- Define network weights between regions (`topology.kubernetes.io/region`) and zones (`topology.kubernetes.io/zone`) 
-in the cluster via custom resources (**NetworkTopology CRD**).
-- Advertise the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/).
-- Implementation of a **QueueSort** plugin for [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting).
-- Implementation of a **Filter & Score** plugin to filter out nodes based 
-on microservice dependencies and score nodes with lower network costs higher to achieve latency-aware scheduling.  
+- Define microservice dependencies in an Application via custom resources (**AppGroup CRD**).
+- Describe the network topology for the underlying cluster via weights between regions (`topology.kubernetes.io/region`) and zones (`topology.kubernetes.io/zone`) via custom resources (**NetworkTopology CRD**).
+- Make existing scheduler plugins aware of network bandwidth by Advertise the nodes' (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/).
+- Provide a **QueueSort** plugin [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting), which orders pods to be scheduled in an **AppGroup** based on their dependencies.
+- Provide **network aware Filter & Score** plugins to filter out nodes based 
+on microservice dependencies defined in **AppGroup** and score nodes with lower network costs (described in **NetworkTopology**)) higher to achieve latency-aware scheduling.  
     
 <!-- previous goal section:
 
@@ -579,26 +578,27 @@ topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) 
 ## Network Topology CRD
 
 We also designed a NetworkTopology CRD based on the current [NodeResourceTopology CRD](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/noderesourcetopology).
-The goal is to store and update network costs between all pair-wise nodes in the cluster based on their zones and regions.  
+The goal is to store and update network costs for nodes across regions, zones, or within zones.  
 
 As an initial design,  network weights can be manually defined in a single NetworkTopology CR where network costs between
 zones and between regions are specified.
 
-As a future plan, we are currently working on another project, where we are designing a [networkTopology controller](https://github.com/jpedro1992/network-topology-controller) that will react to node additions, updates, or removals, and also update the network weights based on latency measurements. 
+As a seperate project, we are providing a [networkTopology controller](https://github.com/jpedro1992/network-topology-controller) in the future. The controller is designed to react to node additions, updates, or removals, and also update the network weights based on latency measurements. 
 
-A [netperf component](https://github.com/jpedro1992/pushing-netperf-metrics-to-prometheus/tree/main) has been developed to execute netperf tests based on the nodes available in the infrastructure. It allows estimating the latency between nodes in the cluster, especially different latency percentiles (i.e., 50th, 90th, and 99th percentile).
+A [netperf component](https://github.com/jpedro1992/pushing-netperf-metrics-to-prometheus/tree/main) has been developed to execute netperf tests based on the nodes available in the infrastructure. It allows estimating the latency between nodes in the cluster, especially different latency percentiles (i.e., 50th, 90th, and 99th percentile). Latency probing for all pairwise nodes is costly for large-scale clusters. Hence, the initial design assumes that the intra-zone cost between nodes is homogenous and only the latencies between zones and regions need to be measured.
 
-These measurements are recorded in a configmap as key-value pairs with **origin** and **destination** as labels. Then, the networkTopology controller accesses the configmap to extract the netperf measurements and calculates accurate network costs across regions and zones in the cluster. The networkTopology controller can then dynamically update the CR accordingly, so scheduling plugins always use the updated network weights instead of the one-time manually configured weights. 
+These measurements are stored and updated in a configmap as key-value pairs with **origin** and **destination** as labels. Then, the networkTopology controller accesses the configmap to extract the netperf measurements and calculates accurate network costs across regions and zones in the cluster. The networkTopology controller can then dynamically update the CR accordingly, so scheduling plugins always use the updated network weights instead of the one-time manually configured weights. 
 
 The periodical probing of the network latency via the netperf component is only necessary for one pair of nodes between zones/regions. One-time probing between a single pair of nodes is sufficient if nodes within a zone have similar connections. Therefore, the probing is limited, avoiding significant overhead for large-scale clusters.
  
-Furthermore, the networkTopology controller can work with any customized software components that update the configmap. Thus, cloud administrators can apply various methods to update the network costs according to their preferences. 
+Furthermore, the networkTopology controller can work with any customized software components that update the configmap. Thus, cloud administrators/developers are free to use different components to obtain network costs according to their own preferences. 
 
 Also, the networkTopology controller will maintain the available bandwidth capacity (i.e., bandwidthAllocatable) between regions and zones in the cluster. Pod allocations and corresponding workload dependencies are read from an AppGroup lister, and bandwidth reservations are saved in the networkTopology CR based on pod deployments.
 
-Experiments will evaluate the performance and feasibility of the network topology CRD. 
+<!-- Comment:Experiments will evaluate the performance and feasibility of the network topology CRD. 
 We argue that a single CR might impact the system's performance concerning execution time to find the network weights for 
 a given region or zone while deploying multiple CRs has an overhead regarding the system's memory to save all CRs. 
+-->
 
 ```yaml
 # Network CRD spec
