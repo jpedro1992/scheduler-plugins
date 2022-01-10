@@ -40,16 +40,29 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
+type Status string
+
+const (
+	// PodGroupNotSpecified denotes no PodGroup is specified in the Pod spec.
+	PodGroupNotSpecified Status = "PodGroup not specified"
+	// PodGroupNotFound denotes the specified PodGroup in the Pod spec is
+	// not found in API server.
+	PodGroupNotFound Status = "PodGroup not found"
+	Success          Status = "Success"
+	Wait             Status = "Wait"
+)
+
 // Manager defines the interfaces for PodGroup management.
 type Manager interface {
 	PreFilter(context.Context, *corev1.Pod) error
-	Permit(context.Context, *corev1.Pod, string) (bool, error)
+	Permit(context.Context, *corev1.Pod) Status
 	PostBind(context.Context, *corev1.Pod, string)
 	GetPodGroup(*corev1.Pod) (string, *v1alpha1.PodGroup)
 	GetCreationTimestamp(*corev1.Pod, time.Time) time.Time
 	AddDeniedPodGroup(string)
 	DeletePermittedPodGroup(string)
 	CalculateAssignedPods(string, string) int
+	ActivateSiblings(pod *corev1.Pod, state *framework.CycleState)
 }
 
 // PodGroupManager defines the scheduling operation called
@@ -91,6 +104,42 @@ func NewPodGroupManager(pgClient pgclientset.Interface, snapshotSharedLister fra
 		permittedPG:                gochache.New(3*time.Second, 3*time.Second),
 	}
 	return pgMgr
+}
+
+// ActivateSiblings stashes the pods belonging to the same PodGroup of the given pod
+// in the given state, with a reserved key "kubernetes.io/pods-to-activate".
+func (pgMgr *PodGroupManager) ActivateSiblings(pod *corev1.Pod, state *framework.CycleState) {
+	pgName := util.GetPodGroupLabel(pod)
+	if pgName == "" {
+		return
+	}
+
+	pods, err := pgMgr.podLister.Pods(pod.Namespace).List(
+		labels.SelectorFromSet(labels.Set{util.PodGroupLabel: pgName}),
+	)
+	if err != nil {
+		klog.ErrorS(err, "Failed to obtain pods belong to a PodGroup", "podGroup", pgName)
+		return
+	}
+	for i := range pods {
+		if pods[i].UID == pod.UID {
+			pods = append(pods[:i], pods[i+1:]...)
+			break
+		}
+	}
+
+	if len(pods) != 0 {
+		if c, err := state.Read(framework.PodsToActivateKey); err == nil {
+			if s, ok := c.(*framework.PodsToActivate); ok {
+				s.Lock()
+				for _, pod := range pods {
+					namespacedName := GetNamespacedName(pod)
+					s.Map[namespacedName] = pod
+				}
+				s.Unlock()
+			}
+		}
+	}
 }
 
 // PreFilter filters out a pod if it
@@ -147,24 +196,23 @@ func (pgMgr *PodGroupManager) PreFilter(ctx context.Context, pod *corev1.Pod) er
 }
 
 // Permit permits a pod to run, if the minMember match, it would send a signal to chan.
-func (pgMgr *PodGroupManager) Permit(ctx context.Context, pod *corev1.Pod, nodeName string) (bool, error) {
+func (pgMgr *PodGroupManager) Permit(ctx context.Context, pod *corev1.Pod) Status {
 	pgFullName, pg := pgMgr.GetPodGroup(pod)
 	if pgFullName == "" {
-		return true, util.ErrorNotMatched
+		return PodGroupNotSpecified
 	}
 	if pg == nil {
 		// A Pod with a podGroup name but without a PodGroup found is denied.
-		return false, fmt.Errorf("PodGroup not found")
+		return PodGroupNotFound
 	}
 
 	assigned := pgMgr.CalculateAssignedPods(pg.Name, pg.Namespace)
 	// The number of pods that have been assigned nodes is calculated from the snapshot.
 	// The current pod in not included in the snapshot during the current scheduling cycle.
-	ready := int32(assigned)+1 >= pg.Spec.MinMember
-	if ready {
-		return true, nil
+	if int32(assigned)+1 >= pg.Spec.MinMember {
+		return Success
 	}
-	return false, util.ErrorWaiting
+	return Wait
 }
 
 // PostBind updates a PodGroup's status.
@@ -225,7 +273,7 @@ func (pgMgr *PodGroupManager) AddDeniedPodGroup(pgFullName string) {
 	pgMgr.lastDeniedPG.Add(pgFullName, "", *pgMgr.lastDeniedPGExpirationTime)
 }
 
-// DeletePodGroup delete a podGroup that pass Pre-Filter but reach PostFilter.
+// DeletePermittedPodGroup deletes a podGroup that pass Pre-Filter but reach PostFilter.
 func (pgMgr *PodGroupManager) DeletePermittedPodGroup(pgFullName string) {
 	pgMgr.permittedPG.Delete(pgFullName)
 }
