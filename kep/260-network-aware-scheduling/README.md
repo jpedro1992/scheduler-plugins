@@ -35,6 +35,7 @@ This proposal introduces an end-to-end solution to model/weight a cluster's netw
 topological information, and leverage that to better schedule latency- and bandwidth-sensitive workloads.
 
 <!-- other details have been excluded from the summary
+previous KEP summary:
 
 This proposal describes the behavior of the Network-Aware Scheduling framework
 that considers latency and bandwidth in the scheduling decision-making process.
@@ -93,7 +94,7 @@ in the cluster via custom resources (**NetworkTopology CRD**).
 - Implementation of a **Filter & Score** plugin to filter out nodes based 
 on microservice dependencies and score nodes with lower network costs higher to achieve latency-aware scheduling.  
     
-<!-- previous goal section
+<!-- previous goal section:
 
 - Provide a network-aware framework to extend scheduling features of Kubernetes by considering latency and bandwidth.
 - Consider different pods as an Application:    
@@ -584,7 +585,26 @@ As an initial design,  network weights can be manually defined in a single Netwo
 zones and between regions are specified.
 
 As a future plan, we are currently working on another project, where we are designing a [networkTopology controller](https://github.com/jpedro1992/network-topology-controller)  
-that will react to node additions, updates, or removals. Also, it will update the network weights based on latency measurements. 
+that will react to node additions, updates, or removals, and also update the network weights based on latency measurements. 
+
+A [netperf component](https://github.com/jpedro1992/pushing-netperf-metrics-to-prometheus/tree/main) has been developed to execute 
+netperf tests based on the nodes available in the infrastructure. It allows estimating the latency between nodes in the cluster, 
+especially different latency percentiles (i.e., 50th, 90th, and 99th percentile).
+
+These measurements are recorded in a configmap as key-value pairs with **origin** and **destination** as labels. Then, the networkTopology controller accesses the configmap to extract the netperf measurements and calculates accurate network costs 
+across regions and zones in the cluster. The networkTopology controller can then dynamically update the CR accordingly, 
+so scheduling plugins always use the updated network weights instead of the one-time manually configured weights. 
+
+The periodical probing of the network latency via the netperf component is only necessary for one pair of nodes between zones/regions. 
+One-time probing between a single pair of nodes is sufficient if nodes within a zone have similar connections. 
+Therefore, the probing is limited, avoiding significant overhead for large-scale clusters.
+ 
+Furthermore, the networkTopology controller can work with any customized software components that update the configmap. 
+Thus, cloud administrators can apply various methods to update the network costs according to their preferences. 
+
+Also, the networkTopology controller will maintain the available bandwidth capacity (i.e., bandwidthAllocatable) between regions 
+and zones in the cluster. Pod allocations and corresponding workload dependencies are read from an AppGroup 
+lister, and bandwidth reservations are saved in the networkTopology CR based on pod deployments.
 
 Experiments will evaluate the performance and feasibility of the network topology CRD. 
 We argue that a single CR might impact the system's performance concerning execution time to find the network weights for 
@@ -1546,4 +1566,4 @@ Unit tests and Integration tests will be added:
 - 2021-9-9: Presentation to the Kubernetes sig-scheduling community. 
 Received feedback and comments on the design and implementation. Recording available [here](https://youtu.be/D9jSqUiaq1Q). 
 - 2021-11-4: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
-<!-- - 2022-01-14: KEP v0.1 sent out for review after receiving feedback on the initial KEP. -->
+<!-- - 2022-01-12: KEP v0.1 sent out for review after receiving feedback on the initial KEP. -->
