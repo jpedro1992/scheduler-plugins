@@ -34,28 +34,6 @@
 This proposal introduces an end-to-end solution to model/weight a cluster's network latency and 
 topological information, and leverage that to better schedule latency- and bandwidth-sensitive workloads.
 
-<!-- other details have been excluded from the summary
-previous KEP summary:
-
-This proposal describes the behavior of the Network-Aware Scheduling framework
-that considers latency and bandwidth in the scheduling decision-making process.
-
-The proposal introduces two custom resources, **AppGroup CRD** and **NetworkTopology CRD**, to maintain 
-both the service topology information from application microservice dependencies and the infrastructure 
-network topology where network weights are established between regions and zones in the cluster. 
-Thus, both application and infrastructure network topology are considered during scheduling. 
-
-The proposal also presents a bandwidth resource component (DaemonSet) to advertise bandwidth resources 
-as **extended resources** to allow already available filter/scoring plugins (e.g., `PodFitsResources`, 
-`BalancedAlocation`) to consider bandwidth allocation.
-
-To tackle latency and bandwidth in the scheduling process, three plugins are proposed in this document: 
-- `TopologicalSort` (**QueueSort**).
-- `NodeNetworkCostFit` (**Filter**).
-- `NetworkMinCost` (**Score**).
-
--->
-
 # Motivation
 
 Many applications are latency-sensitive, demanding lower latency between microservices in the application.
@@ -88,29 +66,10 @@ that implements a latency-aware scheduler extender based on the [scheduler exten
 
 - Define microservice dependencies in an Application via custom resources (**AppGroup CRD**).
 - Describe the network topology for the underlying cluster via weights between regions (`topology.kubernetes.io/region`) and zones (`topology.kubernetes.io/zone`) via custom resources (**NetworkTopology CRD**).
-- Make existing scheduler plugins aware of network bandwidth by Advertise the nodes' (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/).
-- Provide a **QueueSort** plugin [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting), which orders pods to be scheduled in an **AppGroup** based on their dependencies.
-- Provide **network aware Filter & Score** plugins to filter out nodes based 
+- Make existing scheduler plugins aware of network bandwidth by advertise the nodes' (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/).
+- Provide a **QueueSort** plugin [TopologicalSort](https://en.wikipedia.org/wiki/Topological_sorting), which orders pods to be scheduled in an **AppGroup** based on their dependencies.
+- Provide **network-aware Filter & Score** plugins to filter out nodes based 
 on microservice dependencies defined in **AppGroup** and score nodes with lower network costs (described in **NetworkTopology**)) higher to achieve latency-aware scheduling.  
-    
-<!-- previous goal section:
-
-- Provide a network-aware framework to extend scheduling features of Kubernetes by considering latency and bandwidth.
-- Consider different pods as an Application:    
-    - The creation of an **Application Group (AppGroup) CRD**.
-- Define network weights between regions (`topology.kubernetes.io/region`) and zones (`topology.kubernetes.io/zone`) in the cluster:
-    - The creation of a **Network Topology (NetworkTopology) CRD**.
-- The advertising of the nodes (physical) bandwidth capacity as [extended resources](https://kubernetes.io/docs/tasks/administer-cluster/extended-resource-node/): 
-    - Bandwidth requests and limitations allow filtering overloaded nodes (bandwidth) considered for scheduling.
-    - Consider bandwidth requests for scoring plugins (e.g., `MostRequested`, `BalancedAllocation`). 
-- Establish a specific order to allocate Pods based on their AppGroup CRD:
-    - Implementation of a **QueueSort** plugin based on [Topology Sorting](https://en.wikipedia.org/wiki/Topological_sorting#:~:text=In%20computer%20science%2C%20a%20topological,before%20v%20in%20the%20ordering).
-- Filter out nodes based on microservice dependencies among pods belonging to the same application:
-    - Implementation of a **Filter** plugin based on the AppGroup CRD.
-- Near-optimal scheduling decisions based on network costs:
-    - Implementation of a **Score** plugin that scores higher nodes with lower network costs.    
-    
--->
 
 ## Non-Goals
 
@@ -571,8 +530,6 @@ The topology list corresponds to:
 topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) (P2 10) (P11 11)]
 ```
 
-<!-- change appGroup test here! -->
-
 <p align="center"><img src="figs/appGroupTest.png" title="appGroupTest" width="900" class="center"/></p>
 
 ## Network Topology CRD
@@ -580,12 +537,12 @@ topologyList = [(P1 1) (P10 2) (P9 3) (P8 4) (P7 5) (P6 6) (P5 7) (P4 8) (P3 9) 
 We also designed a NetworkTopology CRD based on the current [NodeResourceTopology CRD](https://github.com/kubernetes-sigs/scheduler-plugins/tree/master/pkg/noderesourcetopology).
 The goal is to store and update network costs for nodes across regions, zones, or within zones.  
 
-As an initial design,  network weights can be manually defined in a single NetworkTopology CR where network costs between
+As an initial design, network weights can be manually defined in a single NetworkTopology CR where network costs between
 zones and between regions are specified.
 
-As a seperate project, we are providing a [networkTopology controller](https://github.com/jpedro1992/network-topology-controller) in the future. The controller is designed to react to node additions, updates, or removals, and also update the network weights based on latency measurements. 
+As a separate project, we are providing a [networkTopology controller](https://github.com/jpedro1992/network-topology-controller) in the future. The controller is designed to react to node additions, updates, or removals, and also update the network weights based on latency measurements. 
 
-A [netperf component](https://github.com/jpedro1992/pushing-netperf-metrics-to-prometheus/tree/main) has been developed to execute netperf tests based on the nodes available in the infrastructure. It allows estimating the latency between nodes in the cluster, especially different latency percentiles (i.e., 50th, 90th, and 99th percentile). Latency probing for all pairwise nodes is costly for large-scale clusters. Hence, the initial design assumes that the intra-zone cost between nodes is homogenous and only the latencies between zones and regions need to be measured.
+A [netperf component](https://github.com/jpedro1992/pushing-netperf-metrics-to-prometheus/tree/main) has been developed to execute netperf tests based on the nodes available in the infrastructure. It allows estimating the latency between nodes in the cluster, especially different latency percentiles (i.e., 50th, 90th, and 99th percentile). Latency probing for all pairwise nodes is costly for large-scale clusters. Hence, the initial design assumes that the intra-zone cost between nodes is homogeneous and only the latencies between zones and regions need to be measured.
 
 These measurements are stored and updated in a configmap as key-value pairs with **origin** and **destination** as labels. Then, the networkTopology controller accesses the configmap to extract the netperf measurements and calculates accurate network costs across regions and zones in the cluster. The networkTopology controller can then dynamically update the CR accordingly, so scheduling plugins always use the updated network weights instead of the one-time manually configured weights. 
 
@@ -594,11 +551,6 @@ The periodical probing of the network latency via the netperf component is only 
 Furthermore, the networkTopology controller can work with any customized software components that update the configmap. Thus, cloud administrators/developers are free to use different components to obtain network costs according to their own preferences. 
 
 Also, the networkTopology controller will maintain the available bandwidth capacity (i.e., bandwidthAllocatable) between regions and zones in the cluster. Pod allocations and corresponding workload dependencies are read from an AppGroup lister, and bandwidth reservations are saved in the networkTopology CR based on pod deployments.
-
-<!-- Comment:Experiments will evaluate the performance and feasibility of the network topology CRD. 
-We argue that a single CR might impact the system's performance concerning execution time to find the network weights for 
-a given region or zone while deploying multiple CRs has an overhead regarding the system's memory to save all CRs. 
--->
 
 ```yaml
 # Network CRD spec
@@ -1556,4 +1508,4 @@ Unit tests and Integration tests will be added:
 - 2021-9-9: Presentation to the Kubernetes sig-scheduling community. 
 Received feedback and comments on the design and implementation. Recording available [here](https://youtu.be/D9jSqUiaq1Q). 
 - 2021-11-4: Initial KEP sent out for review, including Summary, Motivation, Proposal, Test plans and Graduation criteria.
-<!-- - 2022-01-12: KEP v0.1 sent out for review after receiving feedback on the initial KEP. -->
+- 2022-01-11: KEP v0.1 sent out for review after receiving feedback on the initial KEP.
