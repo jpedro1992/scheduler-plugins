@@ -42,6 +42,12 @@ func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&NodeResourceTopologyMatchArgs{}, func(obj interface{}) {
 		SetObjectDefaultsNodeResourceTopologyMatchArgs(obj.(*NodeResourceTopologyMatchArgs))
 	})
+	scheme.AddTypeDefaultingFunc(&TopologicalSortArgs{}, func(obj interface{}) {
+		SetObjectDefaultsTopologicalSortArgs(obj.(*TopologicalSortArgs))
+	})
+	scheme.AddTypeDefaultingFunc(&NetworkOverheadArgs{}, func(obj interface{}) {
+		SetObjectDefaultsNetworkOverheadArgs(obj.(*NetworkOverheadArgs))
+	})
 	return nil
 }
 
@@ -63,4 +69,12 @@ func SetObjectDefaultsLoadVariationRiskBalancingArgs(in *LoadVariationRiskBalanc
 
 func SetObjectDefaultsNodeResourceTopologyMatchArgs(in *NodeResourceTopologyMatchArgs) {
 	SetDefaultsNodeResourceTopologyMatchArgs(in)
+}
+
+func SetObjectDefaultsTopologicalSortArgs(in *TopologicalSortArgs) {
+	SetDefaultsTopologicalSortArgs(in)
+}
+
+func SetObjectDefaultsNetworkOverheadArgs(in *NetworkOverheadArgs) {
+	SetDefaultsNetworkOverheadArgs(in)
 }

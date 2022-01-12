@@ -147,6 +147,24 @@ func TestSchedulingDefaults(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "empty config TopologySortArgs",
+			config: &TopologicalSortArgs{},
+			expect: &TopologicalSortArgs{
+				KubeConfigPath: pointer.StringPtr("/etc/kubernetes/scheduler.conf"),
+				Namespaces:     []string{"default"},
+			},
+		},
+		{
+			name:   "empty config NodeNetworkCostFitArgs",
+			config: &NetworkOverheadArgs{},
+			expect: &NetworkOverheadArgs{
+				KubeConfigPath:      pointer.StringPtr("/etc/kubernetes/scheduler.conf"),
+				Namespaces:          []string{"default"},
+				WeightsName:         pointer.StringPtr("UserDefined"),
+				NetworkTopologyName: pointer.StringPtr("nt-default"),
+			},
+		},
 	}
 
 	for _, tc := range tests {

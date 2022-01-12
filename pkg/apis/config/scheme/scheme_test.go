@@ -146,7 +146,7 @@ profiles:
 							Args: &defaultconfig.DefaultPreemptionArgs{MinCandidateNodesPercentage: 10, MinCandidateNodesAbsolute: 100},
 						},
 						{
-							Name: "InterWorkloadAffinity",
+							Name: "InterPodAffinity",
 							Args: &defaultconfig.InterPodAffinityArgs{HardPodAffinityWeight: 1},
 						},
 						{
@@ -171,7 +171,7 @@ profiles:
 							Args: &defaultconfig.NodeResourcesLeastAllocatedArgs{Resources: []defaultconfig.ResourceSpec{{Name: "cpu", Weight: 1}, {Name: "memory", Weight: 1}}},
 						},
 						{
-							Name: "WorkloadTopologySpread",
+							Name: "PodTopologySpread",
 							Args: &defaultconfig.PodTopologySpreadArgs{DefaultingType: defaultconfig.SystemDefaulting},
 						},
 						{
@@ -255,7 +255,7 @@ profiles:
 							Args: &defaultconfig.DefaultPreemptionArgs{MinCandidateNodesPercentage: 10, MinCandidateNodesAbsolute: 100},
 						},
 						{
-							Name: "InterWorkloadAffinity",
+							Name: "InterPodAffinity",
 							Args: &defaultconfig.InterPodAffinityArgs{HardPodAffinityWeight: 1},
 						},
 						{
@@ -280,7 +280,7 @@ profiles:
 							Args: &defaultconfig.NodeResourcesLeastAllocatedArgs{Resources: []defaultconfig.ResourceSpec{{Name: "cpu", Weight: 1}, {Name: "memory", Weight: 1}}},
 						},
 						{
-							Name: "WorkloadTopologySpread",
+							Name: "PodTopologySpread",
 							Args: &defaultconfig.PodTopologySpreadArgs{DefaultingType: defaultconfig.SystemDefaulting},
 						},
 						{
@@ -421,7 +421,7 @@ profiles:
 							Args: &defaultconfig.DefaultPreemptionArgs{MinCandidateNodesPercentage: 10, MinCandidateNodesAbsolute: 100},
 						},
 						{
-							Name: "InterWorkloadAffinity",
+							Name: "InterPodAffinity",
 							Args: &defaultconfig.InterPodAffinityArgs{HardPodAffinityWeight: 1},
 						},
 						{
@@ -442,7 +442,7 @@ profiles:
 							},
 						},
 						{
-							Name: "WorkloadTopologySpread",
+							Name: "PodTopologySpread",
 							Args: &defaultconfig.PodTopologySpreadArgs{DefaultingType: defaultconfig.SystemDefaulting},
 						},
 						{
@@ -532,7 +532,7 @@ profiles:
 							Args: &defaultconfig.DefaultPreemptionArgs{MinCandidateNodesPercentage: 10, MinCandidateNodesAbsolute: 100},
 						},
 						{
-							Name: "InterWorkloadAffinity",
+							Name: "InterPodAffinity",
 							Args: &defaultconfig.InterPodAffinityArgs{HardPodAffinityWeight: 1},
 						},
 						{
@@ -553,7 +553,7 @@ profiles:
 							},
 						},
 						{
-							Name: "WorkloadTopologySpread",
+							Name: "PodTopologySpread",
 							Args: &defaultconfig.PodTopologySpreadArgs{DefaultingType: defaultconfig.SystemDefaulting},
 						},
 						{

@@ -163,8 +163,8 @@ func SetDefaultsTopologicalSortArgs(obj *TopologicalSortArgs) {
 	}
 }
 
-// SetDefaultsNetworkMinCostArgs sets the default parameters for NetworkMinCostArgs plugin.
-func SetDefaultsNetworkMinCostArgs(obj *NetworkOverheadArgs) {
+// SetDefaultsNetworkOverheadArgs sets the default parameters for NetworkMinCostArgs plugin.
+func SetDefaultsNetworkOverheadArgs(obj *NetworkOverheadArgs) {
 	if obj.KubeConfigPath == nil {
 		obj.KubeConfigPath = &defaultKubeConfigPath
 	}
