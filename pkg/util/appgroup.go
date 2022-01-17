@@ -73,7 +73,7 @@ func GetAppGroupFullName(pod *v1.Pod) string {
 	return fmt.Sprintf("%v/%v", pod.Namespace, agName)
 }
 
-// GetDeploymentName get app group from pod annotations
+// GetDeploymentName get workloadName from pod annotations
 func GetDeploymentName(pod *v1.Pod) string {
 	return pod.Labels[DeploymentLabel]
 }
