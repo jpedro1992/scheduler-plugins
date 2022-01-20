@@ -49,102 +49,68 @@ spec:
                       name:
                         type: string
                         description: Algorithm Name (e.g., UserDefined)
-                      regionCostList:
+                      costList:
                         description: Define weights for cross regions in the cluster (CostList)
                         items:
-                          description: OriginInfo contains information about one region.
+                          description: TopologyInfo contains information about one region.
                           properties:
-                            origin:
+                            topologyKey:
                               type: string
-                              description: Region Name (Origin)
-                            costs:
-                              description: Costs contains an array of CostInfo objects.
+                              description: Topology Key (e.g., "topology.kubernetes.io/region", "topology.kubernetes.io/zone")
+                            originCosts:
+                              description: OriginCosts contains an array of OriginInfo objects (OriginList).
                               items:
-                                description: CostInfo contains information about one region.
+                                description: OriginInfo contains information about one origin.
                                 properties:
-                                  destination:
+                                  origin:
                                     type: string
-                                    description: Region name (Destination)
-                                  bandwidthCapacity:
-                                    anyOf:
-                                    - type: integer
-                                    - type: string
-                                    description: Bandwidth Capacity between Origin and Destination.
-                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                    x-kubernetes-int-or-string: true
-                                  bandwidthAllocated:
-                                    anyOf:
-                                    - type: integer
-                                    - type: string
-                                    description: Bandwidth allocated between Origin and Destination.
-                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                    x-kubernetes-int-or-string: true
-                                  networkCost:
-                                    type: integer
-                                    default: 0
-                                    minimum: 0
-                                    format: int64
-                                    description: Cost from Origin to Destination
+                                    description: Region Name (Origin)
+                                  costs:
+                                    description: Costs contains an array of CostInfo objects.
+                                    items:
+                                      description: CostInfo contains information about one region.
+                                      properties:
+                                        destination:
+                                          type: string
+                                          description: Region name (Destination)
+                                        bandwidthCapacity:
+                                          anyOf:
+                                          - type: integer
+                                          - type: string
+                                          description: Bandwidth Capacity between Origin and Destination.
+                                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                          x-kubernetes-int-or-string: true
+                                        bandwidthAllocated:
+                                          anyOf:
+                                          - type: integer
+                                          - type: string
+                                          description: Bandwidth allocated between Origin and Destination.
+                                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                          x-kubernetes-int-or-string: true
+                                        networkCost:
+                                          type: integer
+                                          default: 0
+                                          minimum: 0
+                                          format: int64
+                                          description: Cost from Origin to Destination
+                                      required:
+                                      - destination
+                                      - networkCost
+                                      type: object
+                                    type: array
                                 required:
-                                - destination
-                                - networkCost
+                                - origin
+                                - costs
                                 type: object
                               type: array
                           required:
-                          - origin
-                          - costs
-                          type: object
-                        type: array
-                      zoneCostList:
-                        description: Define weights for zones in the same region (CostList)
-                        items:
-                          description: OriginInfo contains information about one zone.
-                          properties:
-                            origin:
-                              type: string
-                              description: Zone Name (Origin)
-                            costs:
-                              description: Costs contains an array of CostInfo objects.
-                              items:
-                                description: CostInfo contains information about one zone.
-                                properties:
-                                  destination:
-                                    type: string
-                                    description: Zone name (Destination)
-                                  bandwidthCapacity:
-                                    anyOf:
-                                      - type: integer
-                                      - type: string
-                                    description: Bandwidth Capacity between Origin and Destination.
-                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                    x-kubernetes-int-or-string: true
-                                  bandwidthAllocated:
-                                    anyOf:
-                                      - type: integer
-                                      - type: string
-                                    description: Bandwidth allocated between Origin and Destination.
-                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                                    x-kubernetes-int-or-string: true
-                                  networkCost:
-                                    type: integer
-                                    default: 0
-                                    minimum: 0
-                                    format: int64
-                                    description: Cost from Origin to Destination
-                                required:
-                                  - destination
-                                  - networkCost
-                                type: object
-                              type: array
-                          required:
-                            - origin
-                            - costs
+                          - topologyKey
+                          - originCosts
                           type: object
                         type: array
                     required:
                     - name
-                    - regionCostList
-                    - zoneCostList
+                    - costList
                     type: object
                   type: array
                 configmapName:

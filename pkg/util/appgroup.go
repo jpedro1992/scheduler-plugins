@@ -44,18 +44,18 @@ NodeInternalIP  NodeAddressType = "InternalIP"
 
 type NodeAddressType string
 
-// Sort AppGroupTopology by Pod Name
-type ByPodName []schedulingv1.TopologyInfo
+// Sort AppGroupTopology by Workload Name
+type ByWorkloadName []schedulingv1.AppGroupTopologyInfo
 
-func (s ByPodName) Len() int {
+func (s ByWorkloadName) Len() int {
 	return len(s)
 }
 
-func (s ByPodName) Swap(i, j int) {
+func (s ByWorkloadName) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s ByPodName) Less(i, j int) bool {
+func (s ByWorkloadName) Less(i, j int) bool {
 	return s[i].WorkloadName < s[j].WorkloadName
 }
 

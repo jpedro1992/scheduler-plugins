@@ -1,3 +1,4 @@
+# Example Network CRD
 apiVersion: scheduling.sigs.k8s.io/v1alpha1
 kind: NetworkTopology
 metadata:
@@ -13,36 +14,39 @@ spec:
     # 4 Zones:    us-west-1: z1, z2
     #             us-east-1: z3, z4
     - name: "UserDefined"
-      regionCostList: # Define weights between regions
-        - origin: "us-west-1"
-          costs:
-            - destination: "us-east-1"
-              bandwidthCapacity: "10Gi"
-              networkCost: 20
-        - origin: "us-east-1"
-          costs:
-            - destination: "us-west-1"
-              bandwidthCapacity: "10Gi"
-              networkCost: 20
-      zoneCostList: # Define weighs between zones belonging to the same region!
-        - origin: "z1"
-          costs:
-            - destination: "z2"
-              bandwidthCapacity: "1Gi"
-              networkCost: 5
-        - origin: "z2"
-          costs:
-            - destination: "z1"
-              bandwidthCapacity: "1Gi"
-              networkCost: 5
-        - origin: "z3"
-          costs:
-            - destination: "z4"
-              bandwidthCapacity: "1Gi"
-              networkCost: 10
-        - origin: "z4"
-          costs:
-            - destination: "z3"
-              bandwidthCapacity: "1Gi"
-              networkCost: 10
+      costList: # Define weights between regions or between zones
+        - topologyKey: "topology.kubernetes.io/region" # region costs
+          originCosts:
+            - origin: "us-west-1"
+              costs:
+                - destination: "us-east-1"
+                  bandwidthCapacity: "10Gi"
+                  networkCost: 20
+            - origin: "us-east-1"
+              costs:
+                - destination: "us-west-1"
+                  bandwidthCapacity: "10Gi"
+                  networkCost: 20
+        - topologyKey: "topology.kubernetes.io/zone" # zone costs
+          originCosts:
+            - origin: "z1"
+              costs:
+                - destination: "z2"
+                  bandwidthCapacity: "1Gi"
+                  networkCost: 5
+            - origin: "z2"
+              costs:
+                - destination: "z1"
+                  bandwidthCapacity: "1Gi"
+                  networkCost: 5
+            - origin: "z3"
+              costs:
+                - destination: "z4"
+                  bandwidthCapacity: "1Gi"
+                  networkCost: 10
+            - origin: "z4"
+              costs:
+                - destination: "z3"
+                  bandwidthCapacity: "1Gi"
+                  networkCost: 10
 

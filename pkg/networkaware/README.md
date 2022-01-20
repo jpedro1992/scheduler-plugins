@@ -11,7 +11,7 @@ This folder holds the NetworkAware plugins implemented as discussed in the [KEP 
 - [ ] 👦 Beta (used in companies and developed actively)
 - [ ] 👨 Stable (used in companies for production workloads)
 
-## TopSort Plugin (QueueSort)
+## TopologicalSort Plugin (QueueSort)
 
 TO DO
 

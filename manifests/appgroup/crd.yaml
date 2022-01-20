@@ -56,6 +56,28 @@ spec:
                     workloadName:
                       type: string
                       description: Name of the Workload.
+                    workloadRef:
+                      items:
+                        description: Workload Reference (name, apiVersion, Kind)
+                        properties:
+                          kind:
+                            description: Kind is a string value representing the REST resource.
+                            type: string
+                          apiVersion:
+                            description: APIVersion defines the versioned schema of an object.
+                            type: string
+                          namespace:
+                            description: Represents the namespace of the Object
+                            type: string
+                          name:
+                            description: Represents the name of the Object
+                            type: string
+                        required:
+                          - kind
+                          - apiVersion
+                          - namespace
+                          - name
+                        type: object
                     dependencies:
                       items:
                         description: DependenciesList establishes dependencies between pods.
@@ -83,6 +105,7 @@ spec:
                       type: array
                   required:
                   - workloadName
+                  - workloadRef
                   type: object
                 type: array
             required:
@@ -91,29 +114,13 @@ spec:
             - workloads
             type: object
           status:
-            description: Record current allocations (workload name, replica id, hostname).
+            description: Record number of running workloads.
             properties:
               runningWorkloads:
                 description: The number of actively running workloads (e.g., number of pods).
                 format: int32
                 type: integer
                 minimum: 0
-              scheduled:
-                description: The workloads scheduled in the cluster (ScheduledList)
-                items:
-                  description: ScheduledInfo contains information about one Workload.
-                  properties:
-                    workloadName:
-                      type: string
-                      description: Name of the Workload.
-                    replicaID:
-                      type: string
-                      description: Pod ID
-                    hostname:
-                      type: string
-                      description: Hostname of the workload instance
-                  type: object
-                type: array
               scheduleStartTime:
                 description: ScheduleStartTime of the AppGroup
                 format: date-time

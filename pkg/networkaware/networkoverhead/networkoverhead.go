@@ -165,11 +165,11 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	}
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
-	scheduledList := v1alpha1.ScheduledList{}
+	scheduledList := networkAwareUtil.ScheduledList{}
 
 	for _, p := range pods {
 		if networkAwareUtil.AssignedPod(p) {
-			scheduledInfo := v1alpha1.ScheduledInfo{
+			scheduledInfo := networkAwareUtil.ScheduledInfo{
 				WorkloadName:   util.GetDeploymentName(p),
 				ReplicaID: string(p.GetUID()),
 				Hostname:  p.Spec.NodeName,
@@ -193,8 +193,8 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	if pl.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
 			// Sort Costs by origin, might not be sorted since were manually defined
-			sort.Sort(networkAwareUtil.ByOrigin(w.RegionCostList))
-			sort.Sort(networkAwareUtil.ByOrigin(w.ZoneCostList))
+			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
+			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
 		}
 	}
 
@@ -205,8 +205,12 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	for _, w := range networkTopology.Spec.Weights { // Check the weights List
 		if w.Name == pl.weightsName { // If its the Preferred algorithm
 			if region != "" { // Add Region Costs
-				// Binary search through CostList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(w.RegionCostList, region)
+
+				// Binary search through CostList: find the Topology Key for region
+				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
+
+				// Binary search through TopologyList: find the costs for the given Region
+				costs := networkAwareUtil.FindOriginCosts(topologyList, region)
 
 				// Add Region Costs
 				for _, c := range costs {
@@ -216,8 +220,12 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 				}
 			}
 			if zone != "" { // Add Zone Costs
-				// Binary search through CostList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(w.ZoneCostList, zone)
+
+				// Binary search through CostList: find the Topology Key for zone
+				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
+
+				// Binary search through TopologyList: find the costs for the given Region
+				costs := networkAwareUtil.FindOriginCosts(topologyList, zone)
 
 				// Add Zone Costs
 				for _, c := range costs {
@@ -354,11 +362,11 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	}
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
-	scheduledList := v1alpha1.ScheduledList{}
+	scheduledList := networkAwareUtil.ScheduledList{}
 
 	for _, p := range pods {
 		if networkAwareUtil.AssignedPod(p) {
-			scheduledInfo := v1alpha1.ScheduledInfo{
+			scheduledInfo := networkAwareUtil.ScheduledInfo{
 				WorkloadName:   util.GetDeploymentName(p),
 				ReplicaID: string(p.GetUID()),
 				Hostname:  p.Spec.NodeName,
@@ -393,8 +401,8 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	if pl.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
 			// Sort Costs by origin, might not be sorted since were manually defined
-			sort.Sort(networkAwareUtil.ByOrigin(w.RegionCostList))
-			sort.Sort(networkAwareUtil.ByOrigin(w.ZoneCostList))
+			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
+			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
 		}
 	}
 
@@ -402,8 +410,11 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	for _, w := range networkTopology.Spec.Weights { // Check the weights List
 		if w.Name == pl.weightsName { // If its the Preferred algorithm
 			if region != "" { // Add Region Costs
-				// Binary search through CostList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(w.RegionCostList, region)
+				// Binary search through CostList: find the Topology Key for region
+				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
+
+				// Binary search through TopologyList: find the costs for the given Region
+				costs := networkAwareUtil.FindOriginCosts(topologyList, region)
 
 				// Add Region Costs
 				for _, c := range costs {
@@ -413,8 +424,11 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 				}
 			}
 			if zone != "" { // Add Zone Costs
-				// Binary search through CostList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(w.ZoneCostList, zone)
+				// Binary search through CostList: find the Topology Key for zone
+				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
+
+				// Binary search through TopologyList: find the costs for the given Region
+				costs := networkAwareUtil.FindOriginCosts(topologyList, zone)
 
 				// Add Zone Costs
 				for _, c := range costs {

@@ -81,15 +81,12 @@ func TestNetworkOverheadScore(t *testing.T) {
 				v1alpha1.AppGroupWorkload{WorkloadName: "P2", Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{WorkloadName: "P3", MaxNetworkCost: 8}}},
 				v1alpha1.AppGroupWorkload{WorkloadName: "P3"}}},
 		Status: v1alpha1.AppGroupStatus{
-			RunningWorkloads: 3, Scheduled: v1alpha1.ScheduledList{
-				v1alpha1.ScheduledInfo{WorkloadName: "P1", ReplicaID: "id1", Hostname: "n-2"},
-				v1alpha1.ScheduledInfo{WorkloadName: "P2", ReplicaID: "id2", Hostname: "n-5"},
-				v1alpha1.ScheduledInfo{WorkloadName: "P3", ReplicaID: "id3", Hostname: "n-1"},
-			}, ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
+			RunningWorkloads: 3,
+			ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
 			TopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 3}},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 3}},
 		},
 	}
 
@@ -98,16 +95,26 @@ func TestNetworkOverheadScore(t *testing.T) {
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
-		Spec: v1alpha1.NetworkTopologySpec{Weights: v1alpha1.WeightList{
-			v1alpha1.WeightInfo{Name: "UserDefined", RegionCostList: v1alpha1.CostList{
-				v1alpha1.OriginInfo{Origin: "us-west-1", Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
-				v1alpha1.OriginInfo{Origin: "us-east-1", Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}}},
-				ZoneCostList: v1alpha1.CostList{
-					v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
-					v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
-					v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
-					v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
-				}}}},
+		Spec: v1alpha1.NetworkTopologySpec{
+			Weights: v1alpha1.WeightList{
+				v1alpha1.WeightInfo{Name: "UserDefined", CostList: v1alpha1.CostList{
+					v1alpha1.TopologyInfo{
+						TopologyKey: "topology.kubernetes.io/region",
+						OriginCosts: v1alpha1.OriginList{
+							v1alpha1.OriginInfo{Origin: "us-west-1", Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
+							v1alpha1.OriginInfo{Origin: "us-east-1", Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
+						}},
+					v1alpha1.TopologyInfo{
+						TopologyKey: "topology.kubernetes.io/zone",
+						OriginCosts: v1alpha1.OriginList{
+							v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
+							v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
+							v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
+							v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
+						}},
+				}},
+			},
+		},
 	}
 
 	// Create Nodes
@@ -390,16 +397,16 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			ScheduleStartTime:       metav1.Time{time.Now()},
 			TopologyCalculationTime: metav1.Time{time.Now()},
 			TopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P10", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P9", Index: 3},
-				v1alpha1.TopologyInfo{WorkloadName: "P8", Index: 4},
-				v1alpha1.TopologyInfo{WorkloadName: "P7", Index: 5},
-				v1alpha1.TopologyInfo{WorkloadName: "P6", Index: 6},
-				v1alpha1.TopologyInfo{WorkloadName: "P5", Index: 7},
-				v1alpha1.TopologyInfo{WorkloadName: "P4", Index: 8},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 9},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 10},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P10", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P9", Index: 3},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P8", Index: 4},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P7", Index: 5},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P6", Index: 6},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P5", Index: 7},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P4", Index: 8},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 9},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 10},
 			}},
 	}
 
@@ -423,93 +430,102 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
-		Spec: v1alpha1.NetworkTopologySpec{Weights: v1alpha1.WeightList{
-			v1alpha1.WeightInfo{Name: "UserDefined",
-				RegionCostList: v1alpha1.CostList{
-					v1alpha1.OriginInfo{Origin: "R1", Costs: []v1alpha1.CostInfo{
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R2", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R3", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R4", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R5", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50}},
+		Spec: v1alpha1.NetworkTopologySpec{
+			Weights: v1alpha1.WeightList{
+				v1alpha1.WeightInfo{Name: "UserDefined",
+					CostList: v1alpha1.CostList{
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/region",
+							OriginCosts: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "R1", Costs: []v1alpha1.CostInfo{
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R2", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R3", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R4", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R5", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50}},
+								},
+							}},
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/region",
+							OriginCosts: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z5", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z6", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z7", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z8", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z9", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z10", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}},
+								},
+							},
+						},
 					},
 				},
-				ZoneCostList: v1alpha1.CostList{
-					v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z5", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z6", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z7", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z8", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z7", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z9", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z10", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}},
-					},
-				},
-			}},
+			},
 		},
 	}
 
@@ -729,15 +745,12 @@ func TestNetworkOverheadFilter(t *testing.T) {
 				v1alpha1.AppGroupWorkload{WorkloadName: "P2", Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{WorkloadName: "P3", MaxNetworkCost: 8}}},
 				v1alpha1.AppGroupWorkload{WorkloadName: "P3"}}},
 		Status: v1alpha1.AppGroupStatus{
-			RunningWorkloads: 3, Scheduled: v1alpha1.ScheduledList{
-				v1alpha1.ScheduledInfo{WorkloadName: "P1", ReplicaID: "id1", Hostname: "n-2"},
-				v1alpha1.ScheduledInfo{WorkloadName: "P2", ReplicaID: "id2", Hostname: "n-5"},
-				v1alpha1.ScheduledInfo{WorkloadName: "P3", ReplicaID: "id3", Hostname: "n-8"},
-			}, ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
+			RunningWorkloads: 3,
+			ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
 			TopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 3}},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 3}},
 		},
 	}
 
@@ -750,16 +763,26 @@ func TestNetworkOverheadFilter(t *testing.T) {
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
-		Spec: v1alpha1.NetworkTopologySpec{Weights: v1alpha1.WeightList{
-			v1alpha1.WeightInfo{Name: "UserDefined", RegionCostList: v1alpha1.CostList{
-				v1alpha1.OriginInfo{Origin: "us-west-1", Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
-				v1alpha1.OriginInfo{Origin: "us-east-1", Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}}},
-				ZoneCostList: v1alpha1.CostList{
-					v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
-					v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
-					v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
-					v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
-				}}}},
+		Spec: v1alpha1.NetworkTopologySpec{
+			Weights: v1alpha1.WeightList{
+				v1alpha1.WeightInfo{Name: "UserDefined", CostList: v1alpha1.CostList{
+					v1alpha1.TopologyInfo{
+						TopologyKey: "topology.kubernetes.io/region",
+						OriginCosts: v1alpha1.OriginList{
+							v1alpha1.OriginInfo{Origin: "us-west-1", Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
+							v1alpha1.OriginInfo{Origin: "us-east-1", Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
+						}},
+					v1alpha1.TopologyInfo{
+						TopologyKey: "topology.kubernetes.io/zone",
+						OriginCosts: v1alpha1.OriginList{
+							v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
+							v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
+							v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
+							v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
+						}},
+				}},
+			},
+		},
 	}
 
 	// Create Nodes
@@ -938,7 +961,7 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			time.Sleep(1 * time.Second)
 
 			//t.Logf("Test: %v \n", tt.name)
-			t.Logf("WorkloadsScheduled: %v", tt.appGroup.Status.Scheduled)
+			//t.Logf("WorkloadsScheduled: %v", tt.appGroup.Status.Scheduled)
 
 			t.Logf("Workload to schedule: %v / AppGroup: %v", tt.pod, tt.appGroup.Name)
 			nodeInfo := framework.NewNodeInfo()
@@ -994,16 +1017,16 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			ScheduleStartTime:       metav1.Time{time.Now()},
 			TopologyCalculationTime: metav1.Time{time.Now()},
 			TopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P10", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P9", Index: 3},
-				v1alpha1.TopologyInfo{WorkloadName: "P8", Index: 4},
-				v1alpha1.TopologyInfo{WorkloadName: "P7", Index: 5},
-				v1alpha1.TopologyInfo{WorkloadName: "P6", Index: 6},
-				v1alpha1.TopologyInfo{WorkloadName: "P5", Index: 7},
-				v1alpha1.TopologyInfo{WorkloadName: "P4", Index: 8},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 9},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 10},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P10", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P9", Index: 3},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P8", Index: 4},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P7", Index: 5},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P6", Index: 6},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P5", Index: 7},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P4", Index: 8},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 9},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 10},
 			}},
 	}
 
@@ -1027,93 +1050,102 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
-		Spec: v1alpha1.NetworkTopologySpec{Weights: v1alpha1.WeightList{
-			v1alpha1.WeightInfo{Name: "UserDefined",
-				RegionCostList: v1alpha1.CostList{
-					v1alpha1.OriginInfo{Origin: "R1", Costs: []v1alpha1.CostInfo{
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R2", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R3", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R4", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R5", NetworkCost: 50}},
-					},
-					v1alpha1.OriginInfo{Origin: "R5", Costs: []v1alpha1.CostInfo{
-						{Destination: "R1", NetworkCost: 50},
-						{Destination: "R2", NetworkCost: 50},
-						{Destination: "R3", NetworkCost: 50},
-						{Destination: "R4", NetworkCost: 50}},
+		Spec: v1alpha1.NetworkTopologySpec{
+			Weights: v1alpha1.WeightList{
+				v1alpha1.WeightInfo{Name: "UserDefined",
+					CostList: v1alpha1.CostList{
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/region",
+							OriginCosts: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "R1", Costs: []v1alpha1.CostInfo{
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R2", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R3", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R4", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R5", NetworkCost: 50}},
+								},
+								v1alpha1.OriginInfo{Origin: "R5", Costs: []v1alpha1.CostInfo{
+									{Destination: "R1", NetworkCost: 50},
+									{Destination: "R2", NetworkCost: 50},
+									{Destination: "R3", NetworkCost: 50},
+									{Destination: "R4", NetworkCost: 50}},
+								},
+							}},
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/region",
+							OriginCosts: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z5", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z6", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z7", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z8", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z9", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
+								},
+								v1alpha1.OriginInfo{Origin: "Z10", Costs: []v1alpha1.CostInfo{
+									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
+									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
+									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}},
+								},
+							},
+						},
 					},
 				},
-				ZoneCostList: v1alpha1.CostList{
-					v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z5", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z6", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z7", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z8", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z7", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z9", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
-					},
-					v1alpha1.OriginInfo{Origin: "Z10", Costs: []v1alpha1.CostInfo{
-						{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
-						{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
-						{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}},
-					},
-				},
-			}},
+			},
 		},
 	}
 
@@ -1382,6 +1414,7 @@ func getNodes(nodesNum int64, regionNames []string, zoneNames []string) (nodes [
 	return nodes
 }
 
+/*
 func createDependencies(dependenciesNum int64, WorkloadNames []string, nodes []*v1.Node) []v1alpha1.ScheduledInfo {
 	var list []v1alpha1.ScheduledInfo
 	var i int64
@@ -1399,6 +1432,8 @@ func createDependencies(dependenciesNum int64, WorkloadNames []string, nodes []*
 	}
 	return list
 }
+*/
+
 
 func randomInt(min int, max int) int {
 	return min + rand.Intn(max-min)

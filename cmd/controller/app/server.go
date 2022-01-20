@@ -72,11 +72,11 @@ func Run(s *ServerRunOptions) error {
 
 	coreInformerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 	podInformer := coreInformerFactory.Core().V1().Pods()
-	nodeInformer := coreInformerFactory.Core().V1().Nodes()
+	// nodeInformer := coreInformerFactory.Core().V1().Nodes()
 
 	pgCtrl := controller.NewPodGroupController(kubeClient, pgInformer, podInformer, schedClient)
 	eqCtrl := controller.NewElasticQuotaController(kubeClient, eqInformer, podInformer, schedClient)
-	agCtrl := controller.NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, schedClient)
+	agCtrl := controller.NewAppGroupController(kubeClient, agInformer, podInformer, schedClient)
 
 	run := func(ctx context.Context) {
 		go pgCtrl.Run(s.Workers, ctx.Done())

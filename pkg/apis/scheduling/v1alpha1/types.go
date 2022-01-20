@@ -226,8 +226,29 @@ type AppGroupWorkload struct {
 	// Name of the Workload.
 	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 
+	// Workload Reference
+	WorkloadRef AppGroupWorkloadRefInfo `json:"workloadRef,omitempty" protobuf:"bytes,2,opt,name=workloadRef, casttype=AppGroupWorkloadRefInfo"`
+
 	// Dependencies of the Workload.
-	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,rep,name=dependencies, casttype=DependenciesList"`
+	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,3,opt,name=dependencies, casttype=DependenciesList"`
+}
+
+// AppGroupWorkloadRefInfo contains information about one workload.
+// +protobuf=true
+type AppGroupWorkloadRefInfo struct {
+	// Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
+	Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+
+	// Name represents the workload, info: http://kubernetes.io/docs/user-guide/identifiers#names
+	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+
+	// ApiVersion defines the versioned schema of an object.
+	//+optional
+	APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,3,opt,name=apiVersion"`
+
+	// Namespace of the workload
+	//+optional
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,4,opt,name=namespace"`
 }
 
 // AppGroupPodList contains an array of Pod objects.
@@ -261,18 +282,19 @@ type AppGroupStatus struct {
 
 	// Scheduled defines current allocations (workload name, Pod instance id, hostname).
 	// +optional
-	Scheduled ScheduledList `json:"podsScheduled,omitempty" protobuf:"bytes,2,rep,name=scheduled,casttype=ScheduledList"`
+	// Scheduled ScheduledList `json:"podsScheduled,omitempty" protobuf:"bytes,2,rep,name=scheduled,casttype=ScheduledList"`
 
 	// ScheduleStartTime of the group
-	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty" protobuf:"bytes,3,opt,name=scheduleStartTime"`
+	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty" protobuf:"bytes,2,opt,name=scheduleStartTime"`
 
 	// TopologyCalculationTime of the group
-	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty" protobuf:"bytes,4,opt,name=topologyCalculationTime"`
+	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty" protobuf:"bytes,3,opt,name=topologyCalculationTime"`
 
 	// Topology order for TopSort plugin (QueueSort)
-	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,5,rep,name=topologyOrder,casttype=TopologyList"`
+	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,4,rep,name=topologyOrder,casttype=TopologyList"`
 }
 
+/*
 // ScheduledInfo represents the Affinities of a given Workload
 // +protobuf=true
 type ScheduledInfo struct {
@@ -289,17 +311,18 @@ type ScheduledInfo struct {
 // ScheduledList contains an array of Workload Affinities.
 // +protobuf=true
 type ScheduledList []ScheduledInfo
+*/
 
-// TopologyInfo represents the calculated order for the given AppGroup
+// AppGroupTopologyInfo represents the calculated order for the given AppGroup
 // +protobuf=true
-type TopologyInfo struct {
+type AppGroupTopologyInfo struct {
 	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
 	Index   int32  `json:"index,omitempty" protobuf:"bytes,2,opt,name=index"`
 }
 
 // TopologyList contains an array of workload indexes for the TopologySorting plugin.
 // +protobuf=true
-type TopologyList []TopologyInfo
+type TopologyList []AppGroupTopologyInfo
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -337,7 +360,7 @@ type NetworkTopology struct {
 // NetworkTopologySpec represents the template of a NetworkTopology.
 type NetworkTopologySpec struct {
 	// The manual defined weights of the cluster
-	Weights WeightList `json:"weights,omitempty" protobuf:"bytes,1,rep,name=weights,casttype=WeightList"`
+	Weights WeightList `json:"weights,omitempty" protobuf:"bytes,1,opt,name=weights,casttype=WeightList"`
 
 	// ConfigmapName to be used for cost calculation
 	ConfigmapName string `json:"configmapName,omitempty" protobuf:"bytes,2,opt,name=configmapName"`
@@ -350,10 +373,6 @@ type NetworkTopologyStatus struct {
 
 	// The calculation time for the weights in the network topology CRD
 	WeightCalculationTime metav1.Time `json:"weightCalculationTime,omitempty" protobuf:"bytes,2,opt,name=weightCalculationTime"`
-
-	// The calculated weights in the topology.
-	// +optional
-	// Weights WeightList `json:"weightList,omitempty"`
 }
 
 // WeightList contains an array of WeightInfo objects.
@@ -362,7 +381,7 @@ type WeightList []WeightInfo
 
 // CostList contains an array of OriginInfo objects.
 // +protobuf=true
-type CostList []OriginInfo
+type CostList []TopologyInfo
 
 // WeightInfo contains information about all network costs for a given algorithm.
 // +protobuf=true
@@ -371,11 +390,22 @@ type WeightInfo struct {
 	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 
 	// Costs between regions
-	RegionCostList CostList `json:"regionCostList,omitempty" protobuf:"bytes,2,rep,name=regionCostList,casttype=CostList"`
-
-	// Costs between zones
-	ZoneCostList CostList `json:"zoneCostList,omitempty" protobuf:"bytes,3,rep,name=zoneCostList,casttype=CostList"`
+	CostList CostList `json:"costList,omitempty" protobuf:"bytes,2,opt,name=costList,casttype=CostList"`
 }
+
+// TopologyInfo contains information about network costs for a particular Topology Key.
+// +protobuf=true
+type TopologyInfo struct {
+	// Topology key (e.g., "topology.kubernetes.io/region", "topology.kubernetes.io/zone").
+	TopologyKey string `json:"topologyKey,omitempty" protobuf:"bytes,1,opt,name=topologyKey"`
+
+	// OriginCosts for a particular origin.
+	OriginCosts OriginList `json:"originCosts,omitempty" protobuf:"bytes,2,rep,name=originCosts,casttype=OriginList"`
+}
+
+// OriginList contains an array of OriginInfo objects.
+// +protobuf=true
+type OriginList []OriginInfo
 
 // OriginInfo contains information about network costs for a particular Origin.
 // +protobuf=true

@@ -34,6 +34,19 @@ type CostKey struct {
 	Destination string
 }
 
+type ScheduledInfo struct {
+	// Workload Name
+	WorkloadName string
+
+	// Replica ID
+	ReplicaID string
+
+	// Hostname
+	Hostname string
+}
+
+type ScheduledList []ScheduledInfo
+
 func GetNodeRegion(node *v1.Node) string {
 	labels := node.Labels
 	if labels == nil {
@@ -62,19 +75,19 @@ func GetNodeZone(node *v1.Node) string {
 	return region
 }
 
-// Sort OriginInfo by Origin (e.g., Region Name, Zone Name)
-type ByOrigin []schedulingv1.OriginInfo
+// Sort TopologyInfo by TopologyKey
+type ByTopologyKey []schedulingv1.TopologyInfo
 
-func (s ByOrigin) Len() int {
+func (s ByTopologyKey) Len() int {
 	return len(s)
 }
 
-func (s ByOrigin) Swap(i, j int) {
+func (s ByTopologyKey) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s ByOrigin) Less(i, j int) bool {
-	return s[i].Origin < s[j].Origin
+func (s ByTopologyKey) Less(i, j int) bool {
+	return s[i].TopologyKey < s[j].TopologyKey
 }
 
 // Sort CostInfo by Destination (e.g., Region Name, Zone Name)
@@ -128,7 +141,7 @@ func FindPodMaxNetworkCost(d []schedulingv1.DependenciesInfo, podName string) in
 }
 */
 
-func FindPodOrder(t []schedulingv1.TopologyInfo, workloadName string) int32 {
+func FindPodOrder(t schedulingv1.TopologyList, workloadName string) int32 {
 	low := 0
 	high := len(t) - 1
 
@@ -145,22 +158,41 @@ func FindPodOrder(t []schedulingv1.TopologyInfo, workloadName string) int32 {
 	return -1
 }
 
-func FindOriginCosts(costList []schedulingv1.OriginInfo, origin string) []schedulingv1.CostInfo {
+func FindOriginCosts(originList []schedulingv1.OriginInfo, origin string) []schedulingv1.CostInfo {
 	low := 0
-	high := len(costList) - 1
+	high := len(originList) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
-		if costList[mid].Origin == origin {
-			return costList[mid].Costs // Return the Costs
-		} else if costList[mid].Origin < origin {
+		if originList[mid].Origin == origin {
+			return originList[mid].Costs // Return the Costs
+		} else if originList[mid].Origin < origin {
 			low = mid + 1
-		} else if costList[mid].Origin > origin {
+		} else if originList[mid].Origin > origin {
 			high = mid - 1
 		}
 	}
 	// Costs were not found
 	return []schedulingv1.CostInfo{}
+}
+
+
+func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) schedulingv1.OriginList {
+	low := 0
+	high := len(topologyList) - 1
+
+	for low <= high {
+		mid := (low + high) / 2
+		if topologyList[mid].TopologyKey == key {
+			return topologyList[mid].OriginCosts // Return the Costs
+		} else if topologyList[mid].TopologyKey < key {
+			low = mid + 1
+		} else if topologyList[mid].TopologyKey > key {
+			high = mid - 1
+		}
+	}
+	// Topology Key was not found
+	return schedulingv1.OriginList{}
 }
 
 // May I need to sort the previous vector?

@@ -49,22 +49,20 @@ import (
 
 // AppGroupController is a controller that process App groups using provided Handler interface
 type AppGroupController struct {
-	eventRecorder   record.EventRecorder
-	agQueue         workqueue.RateLimitingInterface
-	agLister        schedlister.AppGroupLister
-	podLister       corelister.PodLister
-	nodeLister      corelister.NodeLister
-	agListerSynced  cache.InformerSynced
-	podListerSynced cache.InformerSynced
-	nodeListerSynced      cache.InformerSynced
-	agClient        schedclientset.Interface
+	eventRecorder   	record.EventRecorder
+	agQueue         	workqueue.RateLimitingInterface
+	agLister        	schedlister.AppGroupLister
+	podLister       	corelister.PodLister
+	nodeLister      	corelister.NodeLister
+	agListerSynced  	cache.InformerSynced
+	podListerSynced 	cache.InformerSynced
+	agClient        	schedclientset.Interface
 }
 
 // NewAppGroupController returns a new *AppGroupController
 func NewAppGroupController(client kubernetes.Interface,
 	agInformer schedinformer.AppGroupInformer,
 	podInformer coreinformer.PodInformer,
-	nodeInformer coreinformer.NodeInformer,
 	agClient schedclientset.Interface) *AppGroupController {
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: client.CoreV1().Events(v1.NamespaceAll)})
@@ -90,10 +88,8 @@ func NewAppGroupController(client kubernetes.Interface,
 
 	ctrl.agLister = agInformer.Lister()
 	ctrl.podLister = podInformer.Lister()
-	ctrl.nodeLister = nodeInformer.Lister()
 	ctrl.agListerSynced = agInformer.Informer().HasSynced
 	ctrl.podListerSynced = podInformer.Informer().HasSynced
-	ctrl.nodeListerSynced = nodeInformer.Informer().HasSynced
 	ctrl.agClient = agClient
 	return ctrl
 }
@@ -239,11 +235,13 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	agCopy := ag.DeepCopy()
 	selector := labels.Set(map[string]string{util.AppGroupLabel: agCopy.Name}).AsSelector()
 
+	/*
 	nodes, err := ctrl.nodeLister.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "List nodes failed during syncHandler", "appGroup", klog.KObj(agCopy))
 		return err
 	}
+	*/
 
 	pods, err := ctrl.podLister.List(selector)
 
@@ -267,6 +265,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	agCopy.Status.RunningWorkloads = numWorkloadsRunning
 	klog.V(5).Info("RunningWorkloads: ", numWorkloadsRunning)
 
+	/*
 	// scheduled: ScheduledAppGroup Struct name, replicaID, hostname
 	scheduledList := schedv1alpha1.ScheduledList{}
 
@@ -298,6 +297,8 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	klog.V(5).Info("scheduledList: ", scheduledList)
 
 	agCopy.Status.Scheduled = scheduledList
+
+	 */
 
 	if agCopy.Status.TopologyCalculationTime.IsZero() {
 		klog.InfoS("Initial Calculation of Topology order...")
@@ -412,7 +413,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 
 	for id, pod := range order {
 		index := int32(id + 1)
-		topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
+		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
 			WorkloadName: pod,
 			Index:   index,
 		})
@@ -420,7 +421,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 
 	// Sort TopologyList by Workload Name
 	klog.V(5).Infof("Sort Topology List by pod name... ")
-	sort.Sort(util.ByPodName(topologyList))
+	sort.Sort(util.ByWorkloadName(topologyList))
 
 	klog.V(5).Info("topologyList: ", topologyList)
 	return topologyList, nil
@@ -432,7 +433,7 @@ func defaultTopologyOrder(agCopy *schedv1alpha1.AppGroup, podList schedv1alpha1.
 	var i int32
 	i = 1
 	for _, pod := range podList {
-		topologyList = append(topologyList, schedv1alpha1.TopologyInfo{
+		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
 			WorkloadName: pod.WorkloadName,
 			Index:   i,
 		})
@@ -441,7 +442,7 @@ func defaultTopologyOrder(agCopy *schedv1alpha1.AppGroup, podList schedv1alpha1.
 
 	// Sort TopologyList by Workload Name
 	klog.V(5).Infof("Sort Topology List by pod name... ")
-	sort.Sort(util.ByPodName(topologyList))
+	sort.Sort(util.ByWorkloadName(topologyList))
 
 	klog.V(5).Info("topologyList: ", topologyList)
 	return topologyList

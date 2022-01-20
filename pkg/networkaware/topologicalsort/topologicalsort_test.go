@@ -86,9 +86,9 @@ func TestTopologicalSortLess(t *testing.T) {
 				v1alpha1.AppGroupWorkload{WorkloadName: "P3"},
 			},
 			desiredTopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 3}},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 3}},
 			want: true,
 		},
 		{
@@ -139,16 +139,16 @@ func TestTopologicalSortLess(t *testing.T) {
 				v1alpha1.AppGroupWorkload{WorkloadName: "P10"}, // adService
 			},
 			desiredTopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P10", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P9", Index: 3},
-				v1alpha1.TopologyInfo{WorkloadName: "P8", Index: 4},
-				v1alpha1.TopologyInfo{WorkloadName: "P7", Index: 5},
-				v1alpha1.TopologyInfo{WorkloadName: "P6", Index: 6},
-				v1alpha1.TopologyInfo{WorkloadName: "P5", Index: 7},
-				v1alpha1.TopologyInfo{WorkloadName: "P4", Index: 8},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 9},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 10}},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P10", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P9", Index: 3},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P8", Index: 4},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P7", Index: 5},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P6", Index: 6},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P5", Index: 7},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P4", Index: 8},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 9},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 10}},
 			want: false,
 		},
 		{
@@ -176,9 +176,9 @@ func TestTopologicalSortLess(t *testing.T) {
 				v1alpha1.AppGroupWorkload{WorkloadName: "P3"},
 			},
 			desiredTopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 2},
-				v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 3}},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 2},
+				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 3}},
 			want: true,
 		},
 	}
@@ -282,16 +282,16 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 	}
 
 	desiredTopologyOrder := v1alpha1.TopologyList{
-		v1alpha1.TopologyInfo{WorkloadName: "P1", Index: 1},
-		v1alpha1.TopologyInfo{WorkloadName: "P10", Index: 2},
-		v1alpha1.TopologyInfo{WorkloadName: "P9", Index: 3},
-		v1alpha1.TopologyInfo{WorkloadName: "P8", Index: 4},
-		v1alpha1.TopologyInfo{WorkloadName: "P7", Index: 5},
-		v1alpha1.TopologyInfo{WorkloadName: "P6", Index: 6},
-		v1alpha1.TopologyInfo{WorkloadName: "P5", Index: 7},
-		v1alpha1.TopologyInfo{WorkloadName: "P4", Index: 8},
-		v1alpha1.TopologyInfo{WorkloadName: "P3", Index: 9},
-		v1alpha1.TopologyInfo{WorkloadName: "P2", Index: 10},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P10", Index: 2},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P9", Index: 3},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P8", Index: 4},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P7", Index: 5},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P6", Index: 6},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P5", Index: 7},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P4", Index: 8},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 9},
+		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 10},
 	}
 
 	tests := []struct {
@@ -544,7 +544,6 @@ func makeAG(agName string, numMembers int32, topologySortingAlgorithm string, ap
 		},
 		Status: v1alpha1.AppGroupStatus{
 			RunningWorkloads:       0,
-			Scheduled:     nil,
 			ScheduleStartTime: metav1.Time{Time: time.Now()},
 			TopologyOrder:     nil,
 		},
