@@ -192,8 +192,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 
 	if pl.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
-			// Sort Costs by origin, might not be sorted since were manually defined
-			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
+			// Sort Costs by TopologyKey, might not be sorted since were manually defined
 			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
 		}
 	}
@@ -209,6 +208,11 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 				// Binary search through CostList: find the Topology Key for region
 				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
 
+				if pl.weightsName == "UserDefined" {
+					// Sort Costs by origin, might not be sorted since were manually defined
+					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+				}
+
 				// Binary search through TopologyList: find the costs for the given Region
 				costs := networkAwareUtil.FindOriginCosts(topologyList, region)
 
@@ -223,6 +227,11 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 
 				// Binary search through CostList: find the Topology Key for zone
 				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
+
+				if pl.weightsName == "UserDefined" {
+					// Sort Costs by origin, might not be sorted since were manually defined
+					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+				}
 
 				// Binary search through TopologyList: find the costs for the given Region
 				costs := networkAwareUtil.FindOriginCosts(topologyList, zone)
@@ -300,7 +309,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 
 	if numNotOK > numOK {
 		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("Node %v does not meet several network requirements from Pod dependencies: OK: %v NotOK: %v", nodeInfo.Node().Name, numOK, numNotOK))
+			fmt.Sprintf("Node %v does not meet several network requirements from Workload dependencies: OK: %v NotOK: %v", nodeInfo.Node().Name, numOK, numNotOK))
 	}
 	return nil
 }
@@ -400,8 +409,7 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 
 	if pl.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
-			// Sort Costs by origin, might not be sorted since were manually defined
-			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
+			// Sort Costs by TopologyKey, might not be sorted since were manually defined
 			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
 		}
 	}
@@ -412,6 +420,11 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 			if region != "" { // Add Region Costs
 				// Binary search through CostList: find the Topology Key for region
 				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
+
+				if pl.weightsName == "UserDefined" {
+					// Sort Costs by origin, might not be sorted since were manually defined
+					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+				}
 
 				// Binary search through TopologyList: find the costs for the given Region
 				costs := networkAwareUtil.FindOriginCosts(topologyList, region)
@@ -426,6 +439,11 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 			if zone != "" { // Add Zone Costs
 				// Binary search through CostList: find the Topology Key for zone
 				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
+
+				if pl.weightsName == "UserDefined" {
+					// Sort Costs by origin, might not be sorted since were manually defined
+					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+				}
 
 				// Binary search through TopologyList: find the costs for the given Region
 				costs := networkAwareUtil.FindOriginCosts(topologyList, zone)

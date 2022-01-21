@@ -97,22 +97,29 @@ func TestNetworkOverheadScore(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
 		Spec: v1alpha1.NetworkTopologySpec{
 			Weights: v1alpha1.WeightList{
-				v1alpha1.WeightInfo{Name: "UserDefined", CostList: v1alpha1.CostList{
-					v1alpha1.TopologyInfo{
-						TopologyKey: "topology.kubernetes.io/region",
-						OriginCosts: v1alpha1.OriginList{
-							v1alpha1.OriginInfo{Origin: "us-west-1", Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
-							v1alpha1.OriginInfo{Origin: "us-east-1", Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
-						}},
-					v1alpha1.TopologyInfo{
-						TopologyKey: "topology.kubernetes.io/zone",
-						OriginCosts: v1alpha1.OriginList{
-							v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
-							v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
-							v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
-							v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
-						}},
-				}},
+				v1alpha1.WeightInfo{Name: "UserDefined",
+					CostList: v1alpha1.CostList{
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/region",
+							OriginCosts: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{
+									Origin: "us-west-1",
+									Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
+								v1alpha1.OriginInfo{
+									Origin: "us-east-1",
+									Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
+							}},
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/zone",
+							OriginCosts: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
+								v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
+								v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
+								v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
