@@ -7,27 +7,33 @@ spec:
   numMembers: 3
   topologySortingAlgorithm: KahnSort
   workloads:
-    - workloadName: P1 # Corresponds to the Kubernetes service (Label selector)
-      workloadRef:
+    - workload:
         kind: Deployment
         apiVersion: apps/v1
         namespace: default
         name: P1
       dependencies:
-        - workloadName: P2
+        - workload:
+            kind: Deployment
+            apiVersion: apps/v1
+            namespace: default
+            name: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 30
-    - workloadName: P2
+    - workload:
         kind: Deployment
         apiVersion: apps/v1
         namespace: default
         name: P2
       dependencies:
-        - workloadName: P3
+        - workload:
+            kind: Deployment
+            apiVersion: apps/v1
+            namespace: default
+            name: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
-    - workloadName: P3
-      workloadRef:
+    - workload:
         kind: Deployment
         apiVersion: apps/v1
         namespace: default
