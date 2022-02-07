@@ -66,15 +66,15 @@ var (
 	// DefaultMetricProviderType is the Kubernetes metrics server
 	DefaultMetricProviderType = pluginConfig.KubernetesMetricsServer
 
-	defaultKubeConfigPath string = "/etc/kubernetes/scheduler.conf"
+	defaultKubeConfigPath = "/etc/kubernetes/scheduler.conf"
 
 	defaultResourceSpec = []schedulerconfig.ResourceSpec{
 		{Name: string(v1.ResourceCPU), Weight: 1},
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
 
-	defaultWeightsName string = "UserDefined"
-	defaultNetworkTopologyName string = "nt-default"
+	defaultWeightsName = "UserDefined"
+	defaultNetworkTopologyName = "nt-default"
 )
 
 // SetDefaultsCoschedulingArgs sets the default parameters for Coscheduling plugin.

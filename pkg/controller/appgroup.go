@@ -351,7 +351,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 
 	for _, pod := range podList {
 		for _, dependency := range pod.Dependencies {
-			tree[pod.WorkloadName] = append(tree[pod.WorkloadName], dependency.WorkloadName)
+			tree[pod.Workload] = append(tree[pod.Workload], dependency.Workload)
 		}
 	}
 
@@ -414,7 +414,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 	for id, pod := range order {
 		index := int32(id + 1)
 		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
-			WorkloadName: pod,
+			Workload: pod,
 			Index:   index,
 		})
 	}
@@ -434,7 +434,7 @@ func defaultTopologyOrder(agCopy *schedv1alpha1.AppGroup, podList schedv1alpha1.
 	i = 1
 	for _, pod := range podList {
 		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
-			WorkloadName: pod.WorkloadName,
+			Workload: pod.Workload,
 			Index:   i,
 		})
 		i+=1

@@ -220,22 +220,19 @@ type AppGroupSpec struct {
 	Workloads AppGroupWorkloadList `json:"workloads,omitempty" protobuf:"bytes,3,rep,name=workloads, casttype=AppGroupWorkloadList"`
 }
 
-// AppGroupWorkload represents the workloads (e.g., Pods) belonging to the App Group.
+// AppGroupWorkload represents the Workloads belonging to the App Group.
 // +protobuf=true
 type AppGroupWorkload struct {
-	// Name of the Workload.
-	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
-
-	// Workload Reference
-	WorkloadRef AppGroupWorkloadRefInfo `json:"workloadRef,omitempty" protobuf:"bytes,2,opt,name=workloadRef, casttype=AppGroupWorkloadRefInfo"`
+	// Workload reference Info.
+	Workload AppGroupWorkloadInfo `json:"workload,omitempty" protobuf:"bytes,1,opt,name=workload, casttype=AppGroupWorkloadInfo"`
 
 	// Dependencies of the Workload.
-	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,3,opt,name=dependencies, casttype=DependenciesList"`
+	Dependencies DependenciesList `json:"dependencies,omitempty" protobuf:"bytes,2,opt,name=dependencies, casttype=DependenciesList"`
 }
 
-// AppGroupWorkloadRefInfo contains information about one workload.
+// AppGroupWorkloadInfo contains information about one workload.
 // +protobuf=true
-type AppGroupWorkloadRefInfo struct {
+type AppGroupWorkloadInfo struct {
 	// Kind of the workload; info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
 	Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
 
@@ -258,8 +255,8 @@ type AppGroupWorkloadList []AppGroupWorkload
 // DependenciesInfo contains information about one dependency.
 // +protobuf=true
 type DependenciesInfo struct {
-	// Name of the Workload.
-	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
+	// Workload reference Info.
+	Workload AppGroupWorkloadInfo `json:"workload,omitempty" protobuf:"bytes,1,opt,name=workload, casttype=AppGroupWorkloadInfo"`
 
 	// MinBandwidth between workloads
 	// +optional
@@ -274,15 +271,11 @@ type DependenciesInfo struct {
 // +protobuf=true
 type DependenciesList []DependenciesInfo
 
-// AppGroupStatus represents the current state of a app group.
+// AppGroupStatus represents the current state of an AppGroup.
 type AppGroupStatus struct {
 	// The number of actively running workloads (e.g., number of pods).
 	// +optional
 	RunningWorkloads int32 `json:"runningWorkloads,omitempty" protobuf:"bytes,1,opt,name=runningWorkloads"`
-
-	// Scheduled defines current allocations (workload name, Pod instance id, hostname).
-	// +optional
-	// Scheduled ScheduledList `json:"podsScheduled,omitempty" protobuf:"bytes,2,rep,name=scheduled,casttype=ScheduledList"`
 
 	// ScheduleStartTime of the group
 	ScheduleStartTime metav1.Time `json:"scheduleStartTime,omitempty" protobuf:"bytes,2,opt,name=scheduleStartTime"`
@@ -294,30 +287,14 @@ type AppGroupStatus struct {
 	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,4,rep,name=topologyOrder,casttype=TopologyList"`
 }
 
-/*
-// ScheduledInfo represents the Affinities of a given Workload
-// +protobuf=true
-type ScheduledInfo struct {
-	// Workload Name
-	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
-
-	// Replica ID
-	ReplicaID string `json:"replicaID,omitempty" protobuf:"bytes,2,opt,name=replicaID"`
-
-	// Hostname
-	Hostname string `json:"hostname,omitempty" protobuf:"bytes,3,opt,name=hostname"`
-}
-
-// ScheduledList contains an array of Workload Affinities.
-// +protobuf=true
-type ScheduledList []ScheduledInfo
-*/
-
-// AppGroupTopologyInfo represents the calculated order for the given AppGroup
+// AppGroupTopologyInfo represents the calculated order for a given Workload.
 // +protobuf=true
 type AppGroupTopologyInfo struct {
-	WorkloadName string `json:"workloadName,omitempty" protobuf:"bytes,1,opt,name=workloadName"`
-	Index   int32  `json:"index,omitempty" protobuf:"bytes,2,opt,name=index"`
+	// Workload reference Info.
+	Workload AppGroupWorkloadInfo `json:"workload,omitempty" protobuf:"bytes,1,opt,name=workload, casttype=AppGroupWorkloadInfo"`
+
+	// Topology index.
+	Index int32  `json:"index,omitempty" protobuf:"bytes,2,opt,name=index"`
 }
 
 // TopologyList contains an array of workload indexes for the TopologySorting plugin.
