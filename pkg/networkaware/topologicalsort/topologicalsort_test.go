@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kubernetes/pkg/controller"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
-	ctrAppGroup "sigs.k8s.io/scheduler-plugins/pkg/controller"
+	ctr "sigs.k8s.io/scheduler-plugins/pkg/controller"
 
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
@@ -42,6 +42,99 @@ import (
 )
 
 func TestTopologicalSortLess(t *testing.T) {
+	basicAppGroup := v1alpha1.AppGroupWorkloadList{
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace:  "default"},
+				Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}}}},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"},
+				Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}}}},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace:  "default"}},
+	}
+
+	basicTopologyOrder:= v1alpha1.TopologyList{
+			v1alpha1.AppGroupTopologyInfo{
+				Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+			v1alpha1.AppGroupTopologyInfo{
+				Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+			v1alpha1.AppGroupTopologyInfo{
+				Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+	}
+
+	onlineBoutique:= v1alpha1.AppGroupWorkloadList{
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1",APIVersion: "apps/v1", Namespace: "default"}, // frontend
+			Dependencies: v1alpha1.DependenciesList{
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10",APIVersion: "apps/v1", Namespace:  "default"}},
+			},
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, // cartService
+			Dependencies: v1alpha1.DependenciesList{
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}},
+			},
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, // productCatalogService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, // currencyService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, // paymentService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, // shippingService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, // emailService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, // checkoutService
+			Dependencies: v1alpha1.DependenciesList{
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}},
+			},
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, // recommendationService
+			Dependencies: v1alpha1.DependenciesList{
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+			}},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default",}, // adService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}, // redis-cart
+		},
+	}
+
+	onlineBoutiqueTopologyOrder:= v1alpha1.TopologyList{
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, Index: 4},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, Index: 6},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, Index: 7},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, Index: 8},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 9},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 10},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
+	}
 
 	ctx := context.TODO()
 	tests := []struct {
@@ -52,139 +145,76 @@ func TestTopologicalSortLess(t *testing.T) {
 		want                     bool
 		agName                   string
 		numMembers               int32
-		podNames                 []string
+		workloadNames            []string
 		podPhase                 v1.PodPhase
 		podNextPhase             v1.PodPhase
 		topologySortingAlgorithm string
-		pods                     v1alpha1.AppGroupWorkloadList
-		desiredRunningPods       int32
+		workloadList             v1alpha1.AppGroupWorkloadList
+		desiredRunningWorkloads  int32
 		desiredTopologyOrder     v1alpha1.TopologyList
 		appGroupCreateTime       *metav1.Time
 	}{
 		{
-			name:                     "SimpleChain use case, same AppGroup, P1 order lower than P2",
-			agName:                   "simpleChain",
-			namespace:                "default",
-			numMembers:               3,
-			podNames:                 []string{"P1", "P2", "P3"},
-			desiredRunningPods:       3,
-			podPhase:                 v1.PodRunning,
-			topologySortingAlgorithm: "KahnSort",
+			name:                     	"basic use case, same AppGroup, P1 order lower than P2",
+			agName:                   	"basic",
+			namespace:                	"default",
+			numMembers:               	3,
+			workloadNames:              []string{"P1", "P2", "P3"},
+			desiredRunningWorkloads:    3,
+			podPhase:                 	v1.PodRunning,
+			topologySortingAlgorithm: 	"KahnSort",
 			pInfo1: &framework.QueuedPodInfo{
-				PodInfo: framework.NewPodInfo(makePod("P1", 0, "simpleChain", nil, nil)),
+				PodInfo: framework.NewPodInfo(makePod("P1", 0, "basic", nil, nil)),
 			},
 			pInfo2: &framework.QueuedPodInfo{
-				PodInfo: framework.NewPodInfo(makePod("P2", 0, "simpleChain", nil, nil)),
+				PodInfo: framework.NewPodInfo(makePod("P2", 0, "basic", nil, nil)),
 			},
-			pods: v1alpha1.AppGroupWorkloadList{
-				v1alpha1.AppGroupWorkload{WorkloadName: "P1",
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P2"}}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P2",
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P3"}}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P3"},
-			},
-			desiredTopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 2},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 3}},
+			workloadList: 				basicAppGroup,
+			desiredTopologyOrder: 		basicTopologyOrder,
 			want: true,
 		},
 		{
-			name:                     "OnlineBoutique, same AppGroup, P5 order higher than P1",
-			agName:                   "onlineBoutique",
-			namespace:                "default",
-			numMembers:               10,
-			podNames:                 []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"},
-			desiredRunningPods:       10,
-			podPhase:                 v1.PodRunning,
-			topologySortingAlgorithm: "KahnSort",
+			name:                     	"OnlineBoutique, same AppGroup, P5 order higher than P1",
+			agName:                   	"onlineBoutique",
+			namespace:                	"default",
+			numMembers:               	10,
+			workloadNames:            	[]string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"},
+			desiredRunningWorkloads:  	10,
+			podPhase:                 	v1.PodRunning,
+			topologySortingAlgorithm: 	"KahnSort",
 			pInfo1: &framework.QueuedPodInfo{
 				PodInfo: framework.NewPodInfo(makePod("P5", 0, "onlineBoutique", nil, nil)),
 			},
 			pInfo2: &framework.QueuedPodInfo{
 				PodInfo: framework.NewPodInfo(makePod("P1", 0, "onlineBoutique", nil, nil)),
 			},
-			pods: v1alpha1.AppGroupWorkloadList{
-				v1alpha1.AppGroupWorkload{WorkloadName: "P1", // frontend
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P2"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P3"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P4"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P6"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P8"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P9"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P10"},
-					}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P2"}, // cartService
-				v1alpha1.AppGroupWorkload{WorkloadName: "P3"}, // productCatalogService
-				v1alpha1.AppGroupWorkload{WorkloadName: "P4"}, // currencyService
-				v1alpha1.AppGroupWorkload{WorkloadName: "P5"}, // paymentService
-				v1alpha1.AppGroupWorkload{WorkloadName: "P6"}, // shippingService
-				v1alpha1.AppGroupWorkload{WorkloadName: "P7"}, // emailService
-				v1alpha1.AppGroupWorkload{WorkloadName: "P8", // checkoutService
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P2"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P3"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P4"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P5"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P6"},
-						v1alpha1.DependenciesInfo{WorkloadName: "P7"},
-					}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P9", // recommendationService
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P3"},
-					}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P10"}, // adService
-			},
-			desiredTopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P10", Index: 2},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P9", Index: 3},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P8", Index: 4},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P7", Index: 5},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P6", Index: 6},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P5", Index: 7},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P4", Index: 8},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 9},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 10}},
+			workloadList: 				onlineBoutique,
+			desiredTopologyOrder: 		onlineBoutiqueTopologyOrder,
 			want: false,
 		},
 		{
-			name:                     "Simple Chain but pods from different AppGroup... ",
-			agName:                   "simpleChain",
-			namespace:                "default",
-			numMembers:               3,
-			podNames:                 []string{"P1", "P2", "P3"},
-			desiredRunningPods:       3,
-			podPhase:                 v1.PodRunning,
-			topologySortingAlgorithm: "TarjanSort",
+			name:                     	"Simple Chain but pods from different AppGroup... ",
+			agName:                   	"basic",
+			namespace:                	"default",
+			numMembers:               	3,
+			workloadNames:            	[]string{"P1", "P2", "P3"},
+			desiredRunningWorkloads:  	3,
+			podPhase:                 	v1.PodRunning,
+			topologySortingAlgorithm: 	"TarjanSort",
 			pInfo1: &framework.QueuedPodInfo{
-				PodInfo: framework.NewPodInfo(makePod("P1", 0, "simpleChain", nil, nil)),
+				PodInfo: framework.NewPodInfo(makePod("P1", 0, "basic", nil, nil)),
 			},
 			pInfo2: &framework.QueuedPodInfo{
 				PodInfo: framework.NewPodInfo(makePod("P5", 0, "other", nil, nil)),
 			},
-			pods: v1alpha1.AppGroupWorkloadList{
-				v1alpha1.AppGroupWorkload{WorkloadName: "P1",
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P2"}}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P2",
-					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{WorkloadName: "P3"}}},
-				v1alpha1.AppGroupWorkload{WorkloadName: "P3"},
-			},
-			desiredTopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 2},
-				v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 3}},
+			workloadList: 				basicAppGroup,
+			desiredTopologyOrder: 		basicTopologyOrder,
 			want: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ps := makePodsAppGroup(tt.podNames, tt.agName, tt.podPhase)
+			ps := makePodsAppGroup(tt.workloadNames, tt.agName, tt.podPhase)
 
 			var kubeClient = fake.NewSimpleClientset()
 
@@ -194,16 +224,15 @@ func TestTopologicalSortLess(t *testing.T) {
 				kubeClient = fake.NewSimpleClientset(ps[0], ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], ps[7], ps[8], ps[9])
 			}
 
-			ag := makeAG(tt.agName, tt.numMembers, tt.topologySortingAlgorithm, tt.pods, tt.appGroupCreateTime)
+			ag := makeAG(tt.agName, tt.numMembers, tt.topologySortingAlgorithm, tt.workloadList, tt.appGroupCreateTime)
 			agClient := agfake.NewSimpleClientset(ag)
 
 			informerFactory := informers.NewSharedInformerFactory(kubeClient, controller.NoResyncPeriodFunc())
 			agInformerFactory := schedinformer.NewSharedInformerFactory(agClient, controller.NoResyncPeriodFunc())
 			podInformer := informerFactory.Core().V1().Pods()
-			nodeInformer := informerFactory.Core().V1().Nodes()
 			agInformer := agInformerFactory.Scheduling().V1alpha1().AppGroups()
 
-			ctrl := ctrAppGroup.NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, agClient)
+			ctrl := ctr.NewAppGroupController(kubeClient, agInformer, podInformer, agClient)
 
 			agInformerFactory.Start(ctx.Done())
 			informerFactory.Start(ctx.Done())
@@ -217,7 +246,7 @@ func TestTopologicalSortLess(t *testing.T) {
 					return false, err
 				}
 				if ag.Status.RunningWorkloads == 0 {
-					return false, fmt.Errorf("want %v, got %v", tt.desiredRunningPods, ag.Status.RunningWorkloads)
+					return false, fmt.Errorf("want %v, got %v", tt.desiredRunningWorkloads, ag.Status.RunningWorkloads)
 				}
 				if ag.Status.TopologyOrder == nil {
 					return false, fmt.Errorf("want %v, got %v", tt.desiredTopologyOrder, ag.Status.TopologyOrder)
@@ -241,57 +270,83 @@ func TestTopologicalSortLess(t *testing.T) {
 
 func BenchmarkTopologicalSortPlugin(b *testing.B) {
 	ctx := context.TODO()
-
 	agName := "onlineBoutique"
-	podNames := []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"}
-	var desiredRunningPods int32 = 10
+	workloadNames := []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"}
+	var desiredRunningWorkloads int32 = 10
 	var numMembers int32 = 10
 	namespace := "default"
 	topologySortingAlgorithm := "KahnSort"
 
-	pods := v1alpha1.AppGroupWorkloadList{v1alpha1.AppGroupWorkload{WorkloadName: "P1", // frontend
-		Dependencies: v1alpha1.DependenciesList{
-			v1alpha1.DependenciesInfo{WorkloadName: "P2"},
-			v1alpha1.DependenciesInfo{WorkloadName: "P3"},
-			v1alpha1.DependenciesInfo{WorkloadName: "P4"},
-			v1alpha1.DependenciesInfo{WorkloadName: "P6"},
-			v1alpha1.DependenciesInfo{WorkloadName: "P8"},
-			v1alpha1.DependenciesInfo{WorkloadName: "P9"},
-			v1alpha1.DependenciesInfo{WorkloadName: "P10"},
-		}},
-		v1alpha1.AppGroupWorkload{WorkloadName: "P2"},
-		v1alpha1.AppGroupWorkload{WorkloadName: "P3"}, // productCatalogService
-		v1alpha1.AppGroupWorkload{WorkloadName: "P4"}, // currencyService
-		v1alpha1.AppGroupWorkload{WorkloadName: "P5"}, // paymentService
-		v1alpha1.AppGroupWorkload{WorkloadName: "P6"}, // shippingService
-		v1alpha1.AppGroupWorkload{WorkloadName: "P7"}, // emailService
-		v1alpha1.AppGroupWorkload{WorkloadName: "P8", // checkoutService
+	onlineBoutique:= v1alpha1.AppGroupWorkloadList{
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1",APIVersion: "apps/v1", Namespace: "default"}, // frontend
 			Dependencies: v1alpha1.DependenciesList{
-				v1alpha1.DependenciesInfo{WorkloadName: "P2"},
-				v1alpha1.DependenciesInfo{WorkloadName: "P3"},
-				v1alpha1.DependenciesInfo{WorkloadName: "P4"},
-				v1alpha1.DependenciesInfo{WorkloadName: "P5"},
-				v1alpha1.DependenciesInfo{WorkloadName: "P6"},
-				v1alpha1.DependenciesInfo{WorkloadName: "P7"},
-			}},
-		v1alpha1.AppGroupWorkload{WorkloadName: "P9",
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace:  "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10",APIVersion: "apps/v1", Namespace:  "default"}},
+			},
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, // cartService
 			Dependencies: v1alpha1.DependenciesList{
-				v1alpha1.DependenciesInfo{WorkloadName: "P3"},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}},
+			},
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, // productCatalogService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, // currencyService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, // paymentService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, // shippingService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, // emailService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, // checkoutService
+			Dependencies: v1alpha1.DependenciesList{
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}},
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}},
+			},
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, // recommendationService
+			Dependencies: v1alpha1.DependenciesList{
+				v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
 			}},
-		v1alpha1.AppGroupWorkload{WorkloadName: "P10"},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default",}, // adService
+		},
+		v1alpha1.AppGroupWorkload{
+			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}, // redis-cart
+		},
 	}
 
-	desiredTopologyOrder := v1alpha1.TopologyList{
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P1", Index: 1},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P10", Index: 2},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P9", Index: 3},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P8", Index: 4},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P7", Index: 5},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P6", Index: 6},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P5", Index: 7},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P4", Index: 8},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P3", Index: 9},
-		v1alpha1.AppGroupTopologyInfo{WorkloadName: "P2", Index: 10},
+    desiredTopologyOrder:= v1alpha1.TopologyList{
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, Index: 4},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, Index: 6},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, Index: 7},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, Index: 8},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 9},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 10},
+		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
 	}
 
 	tests := []struct {
@@ -300,14 +355,14 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 		want                     bool
 		agName                   string
 		numMembers               int32
-		podNames                 []string
+		workloadNames            []string
 		podNum                   int
 		podPhase                 v1.PodPhase
 		podNextPhase             v1.PodPhase
 		topologySortingAlgorithm string
-		pods                     v1alpha1.AppGroupWorkloadList
+		workloadList             v1alpha1.AppGroupWorkloadList
 		desiredTopologyOrder     v1alpha1.TopologyList
-		desiredRunningPods       int32
+		desiredRunningWorkloads  int32
 		appGroupCreateTime       *metav1.Time
 	}{
 		{
@@ -316,11 +371,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   10,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -329,11 +384,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   100,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -342,11 +397,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   500,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -355,11 +410,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   1000,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -368,11 +423,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   2000,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -381,11 +436,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   3000,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -394,11 +449,11 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   5000,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 		{
@@ -407,17 +462,17 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 			namespace:                namespace,
 			numMembers:               numMembers,
 			podNum:                   10000,
-			podNames:                 podNames,
-			desiredRunningPods:       desiredRunningPods,
+			workloadNames:            workloadNames,
+			desiredRunningWorkloads:  desiredRunningWorkloads,
 			podPhase:                 v1.PodRunning,
 			topologySortingAlgorithm: topologySortingAlgorithm,
-			pods:                     pods,
+			workloadList:             onlineBoutique,
 			desiredTopologyOrder:     desiredTopologyOrder,
 		},
 	}
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
-			ps := makePodsAppGroup(tt.podNames, tt.agName, tt.podPhase)
+			ps := makePodsAppGroup(tt.workloadNames, tt.agName, tt.podPhase)
 
 			var kubeClient = fake.NewSimpleClientset()
 
@@ -427,16 +482,15 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 				kubeClient = fake.NewSimpleClientset(ps[0], ps[1], ps[2], ps[3], ps[4], ps[5], ps[6], ps[7], ps[8], ps[9])
 			}
 
-			ag := makeAG(tt.agName, tt.numMembers, tt.topologySortingAlgorithm, tt.pods, tt.appGroupCreateTime)
+			ag := makeAG(tt.agName, tt.numMembers, tt.topologySortingAlgorithm, tt.workloadList, tt.appGroupCreateTime)
 			agClient := agfake.NewSimpleClientset(ag)
 
 			informerFactory := informers.NewSharedInformerFactory(kubeClient, controller.NoResyncPeriodFunc())
 			agInformerFactory := schedinformer.NewSharedInformerFactory(agClient, controller.NoResyncPeriodFunc())
 			podInformer := informerFactory.Core().V1().Pods()
-			nodeInformer := informerFactory.Core().V1().Nodes()
 			agInformer := agInformerFactory.Scheduling().V1alpha1().AppGroups()
 
-			ctrl := ctrAppGroup.NewAppGroupController(kubeClient, agInformer, podInformer, nodeInformer, agClient)
+			ctrl := ctr.NewAppGroupController(kubeClient, agInformer, podInformer, agClient)
 
 			agInformerFactory.Start(ctx.Done())
 			informerFactory.Start(ctx.Done())
@@ -450,7 +504,7 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 					return false, err
 				}
 				if ag.Status.RunningWorkloads == 0 {
-					return false, fmt.Errorf("want %v, got %v", tt.desiredRunningPods, ag.Status.RunningWorkloads)
+					return false, fmt.Errorf("want %v, got %v", tt.desiredRunningWorkloads, ag.Status.RunningWorkloads)
 				}
 				if ag.Status.TopologyOrder == nil {
 					return false, fmt.Errorf("want %v, got %v", tt.desiredTopologyOrder, ag.Status.TopologyOrder)
@@ -467,8 +521,8 @@ func BenchmarkTopologicalSortPlugin(b *testing.B) {
 				namespaces: []string{metav1.NamespaceDefault},
 			}
 
-			pInfo1 := getPodInfos(tt.podNum, tt.agName, tt.podNames)
-			pInfo2 := getPodInfos(tt.podNum, tt.agName, tt.podNames)
+			pInfo1 := getPodInfos(tt.podNum, tt.agName, tt.workloadNames)
+			pInfo2 := getPodInfos(tt.podNum, tt.agName, tt.workloadNames)
 
 			//b.Logf("len(pInfo1): %v", len(pInfo1))
 			//b.Logf("len(pInfo2): %v", len(pInfo2))
@@ -540,7 +594,7 @@ func makeAG(agName string, numMembers int32, topologySortingAlgorithm string, ap
 		Spec: v1alpha1.AppGroupSpec{
 			NumMembers:               numMembers,
 			TopologySortingAlgorithm: topologySortingAlgorithm,
-			Workloads:                     appGroupPod,
+			Workloads:                appGroupPod,
 		},
 		Status: v1alpha1.AppGroupStatus{
 			RunningWorkloads:       0,

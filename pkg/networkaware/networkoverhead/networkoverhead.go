@@ -26,10 +26,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"math"
-	pluginConfig "sigs.k8s.io/scheduler-plugins/pkg/apis/config"
+	pluginconfig "sigs.k8s.io/scheduler-plugins/pkg/apis/config"
 	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
-	schedLister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
-	networkAwareUtil "sigs.k8s.io/scheduler-plugins/pkg/networkaware/util"
+	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
+	networkawareutil "sigs.k8s.io/scheduler-plugins/pkg/networkaware/util"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 	"sort"
 )
@@ -42,24 +42,24 @@ const (
 	SameZone     = 1
 )
 
-// NetworkOverhead : scheduler plugin
+// NetworkOverhead : Filter and Score nodes based on Pod's AppGroup requirements: MaxNetworkCosts requirements among Pods with dependencies
 type NetworkOverhead struct {
 	handle      framework.Handle
 	podLister   corelisters.PodLister
-	agLister    *schedLister.AppGroupLister
-	ntLister    *schedLister.NetworkTopologyLister
+	agLister    *schedlister.AppGroupLister
+	ntLister    *schedlister.NetworkTopologyLister
 	namespaces  []string
 	weightsName string
 	ntName      string
 }
 
 // Name : returns name of the plugin.
-func (pl *NetworkOverhead) Name() string {
+func (no *NetworkOverhead) Name() string {
 	return Name
 }
 
-func getArgs(obj runtime.Object) (*pluginConfig.NetworkOverheadArgs, error) {
-	NetworkOverheadArgs, ok := obj.(*pluginConfig.NetworkOverheadArgs)
+func getArgs(obj runtime.Object) (*pluginconfig.NetworkOverheadArgs, error) {
+	NetworkOverheadArgs, ok := obj.(*pluginconfig.NetworkOverheadArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type NetworkOverhead, got %T", obj)
 	}
@@ -68,8 +68,8 @@ func getArgs(obj runtime.Object) (*pluginConfig.NetworkOverheadArgs, error) {
 }
 
 // ScoreExtensions : an interface for Score extended functionality
-func (pl *NetworkOverhead) ScoreExtensions() framework.ScoreExtensions {
-	return pl
+func (no *NetworkOverhead) ScoreExtensions() framework.ScoreExtensions {
+	return no
 }
 
 // New : create an instance of a NetworkMinCost plugin
@@ -82,17 +82,17 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 		return nil, err
 	}
 
-	agLister, err := networkAwareUtil.InitAppGroupInformer(&args.MasterOverride, &args.KubeConfigPath)
+	agLister, err := networkawareutil.InitAppGroupInformer(&args.MasterOverride, &args.KubeConfigPath)
 	if err != nil {
 		return nil, err
 	}
 
-	ntLister, err := networkAwareUtil.InitNetworkTopologyInformer(&args.MasterOverride, &args.KubeConfigPath)
+	ntLister, err := networkawareutil.InitNetworkTopologyInformer(&args.MasterOverride, &args.KubeConfigPath)
 	if err != nil {
 		return nil, err
 	}
 
-	pl := &NetworkOverhead{
+	no := &NetworkOverhead{
 		handle:      handle,
 		podLister:   handle.SharedInformerFactory().Core().V1().Pods().Lister(),
 		agLister:    agLister,
@@ -101,50 +101,50 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 		weightsName: args.WeightsName,
 		ntName:      args.NetworkTopologyName,
 	}
-	return pl, nil
+	return no, nil
 }
 
 // Filter : evaluate if node can respect maxNetworkCost requirements
-func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 
-	klog.V(6).Infof("Filter: pod %q on node %q", pod.GetName(), nodeInfo.Node().Name)
+	klog.V(4).Infof("Filter: pod %q on node %q", pod.GetName(), nodeInfo.Node().Name)
 	if nodeInfo.Node() == nil {
 		return framework.NewStatus(framework.Error, "node not found")
 	}
 
 	// Check if Pod belongs to an App Group
-	agName := util.GetAppGroupLabel(pod)
+	agName := util.GetPodAppGroupLabel(pod)
 	if len(agName) == 0 { // Return
 		return nil
 	}
 
-	appGroup, err := findAppGroupNetworkOverhead(agName, pl)
+	appGroup, err := findAppGroupNetworkOverhead(agName, no)
 	if err != nil {
 		klog.ErrorS(err, "Error while returning AppGroup")
 		return nil
 	}
 
-	networkTopology, err := findNetworkTopologyNetworkOverhead(pl.ntName, pl)
+	networkTopology, err := findNetworkTopologyNetworkOverhead(no.ntName, no)
 	if err != nil {
 		klog.ErrorS(err, "Error while returning NetworkTopology")
 		return nil
 	}
 
-	klog.V(6).Info("AppGroup CRD: ", appGroup.Name)
-	klog.V(6).Info("Network Topology CRD: ", networkTopology.Name)
+	klog.V(4).Info("AppGroup CRD: ", appGroup.Name)
+	klog.V(4).Info("Network Topology CRD: ", networkTopology.Name)
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
 	ls := pod.GetLabels()
 	for _, p := range appGroup.Spec.Workloads {
-		if p.WorkloadName == ls[util.DeploymentLabel] {
+		if p.Workload.Name == ls[util.DeploymentLabel] {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
 		}
 	}
 
-	klog.V(6).Info("dependencyList: ", dependencyList)
+	klog.V(4).Info("dependencyList: ", dependencyList)
 
 	// If the pod has no dependencies, return
 	if dependencyList == nil {
@@ -153,7 +153,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 
 	// Get pods from lister
 	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
-	pods, err := pl.podLister.List(selector)
+	pods, err := no.podLister.List(selector)
 	if err != nil {
 		klog.ErrorS(err, "Error while returning pods from appGroup, return")
 		return nil
@@ -165,11 +165,11 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	}
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
-	scheduledList := networkAwareUtil.ScheduledList{}
+	scheduledList := networkawareutil.ScheduledList{}
 
 	for _, p := range pods {
-		if networkAwareUtil.AssignedPod(p) {
-			scheduledInfo := networkAwareUtil.ScheduledInfo{
+		if networkawareutil.AssignedPod(p) {
+			scheduledInfo := networkawareutil.ScheduledInfo{
 				WorkloadName:   util.GetDeploymentName(p),
 				ReplicaID: string(p.GetUID()),
 				Hostname:  p.Spec.NodeName,
@@ -178,7 +178,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 		}
 	}
 
-	klog.V(6).Info("scheduledList: ", scheduledList)
+	klog.V(4).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
 	if scheduledList == nil{
@@ -187,38 +187,38 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	}
 
 	// Check if bandwidth and network requirements can be met
-	region := networkAwareUtil.GetNodeRegion(nodeInfo.Node())
-	zone := networkAwareUtil.GetNodeZone(nodeInfo.Node())
+	region := networkawareutil.GetNodeRegion(nodeInfo.Node())
+	zone := networkawareutil.GetNodeZone(nodeInfo.Node())
 
-	if pl.weightsName == "UserDefined" { // Manual weights were selected
+	if no.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
 			// Sort Costs by TopologyKey, might not be sorted since were manually defined
-			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
+			sort.Sort(networkawareutil.ByTopologyKey(w.CostList))
 		}
 	}
 
 	// Create map for cost / destinations. Search for requirements faster...
-	var costMap = make(map[networkAwareUtil.CostKey]int64)
+	var costMap = make(map[networkawareutil.CostKey]int64)
 
 	seen := false
 	for _, w := range networkTopology.Spec.Weights { // Check the weights List
-		if w.Name == pl.weightsName { // If its the Preferred algorithm
+		if w.Name == no.weightsName { // If its the Preferred algorithm
 			if region != "" { // Add Region Costs
 
 				// Binary search through CostList: find the Topology Key for region
-				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
+				topologyList := networkawareutil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
 
-				if pl.weightsName == "UserDefined" {
+				if no.weightsName == "UserDefined" {
 					// Sort Costs by origin, might not be sorted since were manually defined
-					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+					sort.Sort(networkawareutil.ByOrigin(topologyList))
 				}
 
 				// Binary search through TopologyList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(topologyList, region)
+				costs := networkawareutil.FindOriginCosts(topologyList, region)
 
 				// Add Region Costs
 				for _, c := range costs {
-					costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+					costMap[networkawareutil.CostKey{ // Add the cost to the map
 						Origin:      region,
 						Destination: c.Destination}] = c.NetworkCost
 				}
@@ -226,19 +226,19 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 			if zone != "" { // Add Zone Costs
 
 				// Binary search through CostList: find the Topology Key for zone
-				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
+				topologyList := networkawareutil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
 
-				if pl.weightsName == "UserDefined" {
+				if no.weightsName == "UserDefined" {
 					// Sort Costs by origin, might not be sorted since were manually defined
-					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+					sort.Sort(networkawareutil.ByOrigin(topologyList))
 				}
 
 				// Binary search through TopologyList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(topologyList, zone)
+				costs := networkawareutil.FindOriginCosts(topologyList, zone)
 
 				// Add Zone Costs
 				for _, c := range costs {
-					costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+					costMap[networkawareutil.CostKey{ // Add the cost to the map
 						Origin:      zone,
 						Destination: c.Destination}] = c.NetworkCost
 				}
@@ -255,19 +255,19 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	for _, podAllocated := range scheduledList { // For each pod already allocated
 		if podAllocated.Hostname != "" { // if already updated by the controller
 			for _, d := range dependencyList { // For each pod dependency
-				if podAllocated.WorkloadName == d.WorkloadName { // If the pod allocated is an established dependency
+				if podAllocated.WorkloadName == d.Workload.Name { // If the pod allocated is an established dependency
 					if podAllocated.Hostname == nodeInfo.Node().Name { // If the Pod hostname is the node being filtered, requirements are checked via extended resources
 						numOK += 1
 					} else { // If Nodes are not the same
 						// Get NodeInfo from pod Hostname
-						podHostname, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
+						podHostname, err := no.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
 						if err != nil {
 							return framework.NewStatus(framework.Error, "pod hostname not found")
 						}
 
 						// Get zone and region from Pod Hostname
-						regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname.Node())
-						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname.Node())
+						regionPodHostname := networkawareutil.GetNodeRegion(podHostname.Node())
+						zonePodHostname := networkawareutil.GetNodeZone(podHostname.Node())
 
 						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
 							numNotOK += 1
@@ -275,7 +275,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 							if zone == zonePodHostname { // If Nodes belong to the same zone
 								numOK += 1
 							} else { // belong to a different zone, check maxNetworkCost
-								cost, costOK := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
+								cost, costOK := costMap[networkawareutil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
 									Origin:      zone, // Time Complexity: O(1)
 									Destination: zonePodHostname,
 								}]
@@ -288,7 +288,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 								}
 							}
 						} else { // belong to a different region
-							cost, costOK := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
+							cost, costOK := costMap[networkawareutil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
 								Origin:      region, // Time Complexity: O(1)
 								Destination: regionPodHostname,
 							}]
@@ -305,7 +305,7 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 			}
 		}
 	}
-	klog.V(6).Infof("NumNotOk: %v / numOK: %v ", numNotOK, numOK)
+	klog.V(4).Infof("NumNotOk: %v / numOK: %v ", numNotOK, numOK)
 
 	if numNotOK > numOK {
 		return framework.NewStatus(framework.Unschedulable,
@@ -315,44 +315,44 @@ func (pl *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 }
 
 // Score : evaluate score for a node
-func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
+func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
 
-	klog.V(6).Infof("Calculating score for pod %q on node %q", pod.GetName(), nodeName)
+	klog.V(4).Infof("Calculating score for pod %q on node %q", pod.GetName(), nodeName)
 	score := framework.MinNodeScore
 
 	// Check if Pod belongs to an App Group
-	agName := util.GetAppGroupLabel(pod)
+	agName := util.GetPodAppGroupLabel(pod)
 	if len(agName) == 0 { // Score all nodes equally
 		return score, framework.NewStatus(framework.Success, "Pod does not belong to an AppGroup: min score")
 	}
 
-	appGroup, err := findAppGroupNetworkOverhead(agName, pl)
+	appGroup, err := findAppGroupNetworkOverhead(agName, no)
 	if err != nil {
 		klog.ErrorS(err, "Error while returning AppGroup")
 		return score, framework.NewStatus(framework.Error, "Error while returning AppGroup: min score")
 	}
 
-	networkTopology, err := findNetworkTopologyNetworkOverhead(pl.ntName, pl)
+	networkTopology, err := findNetworkTopologyNetworkOverhead(no.ntName, no)
 	if err != nil {
 		klog.ErrorS(err, "Error while returning NetworkTopology")
 		return score, framework.NewStatus(framework.Error, "Error while returning NetworkTopology: min score")
 	}
 
-	klog.V(6).Info("AppGroup CRD: ", appGroup.Name)
-	klog.V(6).Info("Network Topology CRD: ", networkTopology.Name)
+	klog.V(4).Info("AppGroup CRD: ", appGroup.Name)
+	klog.V(4).Info("Network Topology CRD: ", networkTopology.Name)
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
 	ls := pod.GetLabels()
 	for _, p := range appGroup.Spec.Workloads {
-		if p.WorkloadName == ls[util.DeploymentLabel] {
+		if p.Workload.Name == ls[util.DeploymentLabel] {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
 		}
 	}
 
-	klog.V(6).Info("dependencyList: ", dependencyList)
+	klog.V(4).Info("dependencyList: ", dependencyList)
 
 	// If the pod has no dependencies, return min score
 	if dependencyList == nil {
@@ -361,7 +361,7 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 
 	// Get pods from lister
 	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
-	pods, err := pl.podLister.List(selector)
+	pods, err := no.podLister.List(selector)
 	if err != nil {
 		return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pods from lister: %v", err))
 	}
@@ -371,11 +371,11 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	}
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
-	scheduledList := networkAwareUtil.ScheduledList{}
+	scheduledList := networkawareutil.ScheduledList{}
 
 	for _, p := range pods {
-		if networkAwareUtil.AssignedPod(p) {
-			scheduledInfo := networkAwareUtil.ScheduledInfo{
+		if networkawareutil.AssignedPod(p) {
+			scheduledInfo := networkawareutil.ScheduledInfo{
 				WorkloadName:   util.GetDeploymentName(p),
 				ReplicaID: string(p.GetUID()),
 				Hostname:  p.Spec.NodeName,
@@ -384,7 +384,7 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 		}
 	}
 
-	klog.V(6).Info("scheduledList: ", scheduledList)
+	klog.V(4).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
 	if scheduledList == nil{ //appGroup.Status.PodsScheduled == nil {
@@ -392,65 +392,65 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	}
 
 	// Create map for cost / destinations. Search for costs faster...
-	var costMap = make(map[networkAwareUtil.CostKey]int64)
+	var costMap = make(map[networkawareutil.CostKey]int64)
 
 	// Get NodeInfo from nodeName
-	nodeInfo, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
+	nodeInfo, err := no.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
 	if err != nil {
 		return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting node %q from Snapshot: %v", nodeName, err))
 	}
 
 	// Retrieve Region and Zone from node
-	region := networkAwareUtil.GetNodeRegion(nodeInfo.Node())
-	zone := networkAwareUtil.GetNodeZone(nodeInfo.Node())
+	region := networkawareutil.GetNodeRegion(nodeInfo.Node())
+	zone := networkawareutil.GetNodeZone(nodeInfo.Node())
 
-	klog.V(6).Info("Node Region: ", region)
-	klog.V(6).Info("Node Zone: ", zone)
+	klog.V(4).Info("Node Region: ", region)
+	klog.V(4).Info("Node Zone: ", zone)
 
-	if pl.weightsName == "UserDefined" { // Manual weights were selected
+	if no.weightsName == "UserDefined" { // Manual weights were selected
 		for _, w := range networkTopology.Spec.Weights {
 			// Sort Costs by TopologyKey, might not be sorted since were manually defined
-			sort.Sort(networkAwareUtil.ByTopologyKey(w.CostList))
+			sort.Sort(networkawareutil.ByTopologyKey(w.CostList))
 		}
 	}
 
 	seen := false
 	for _, w := range networkTopology.Spec.Weights { // Check the weights List
-		if w.Name == pl.weightsName { // If its the Preferred algorithm
+		if w.Name == no.weightsName { // If its the Preferred algorithm
 			if region != "" { // Add Region Costs
 				// Binary search through CostList: find the Topology Key for region
-				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
+				topologyList := networkawareutil.FindTopologyKey(w.CostList, v1.LabelTopologyRegion)
 
-				if pl.weightsName == "UserDefined" {
+				if no.weightsName == "UserDefined" {
 					// Sort Costs by origin, might not be sorted since were manually defined
-					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+					sort.Sort(networkawareutil.ByOrigin(topologyList))
 				}
 
 				// Binary search through TopologyList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(topologyList, region)
+				costs := networkawareutil.FindOriginCosts(topologyList, region)
 
 				// Add Region Costs
 				for _, c := range costs {
-					costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+					costMap[networkawareutil.CostKey{ // Add the cost to the map
 						Origin:      region,
 						Destination: c.Destination}] = c.NetworkCost
 				}
 			}
 			if zone != "" { // Add Zone Costs
 				// Binary search through CostList: find the Topology Key for zone
-				topologyList := networkAwareUtil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
+				topologyList := networkawareutil.FindTopologyKey(w.CostList, v1.LabelTopologyZone)
 
-				if pl.weightsName == "UserDefined" {
+				if no.weightsName == "UserDefined" {
 					// Sort Costs by origin, might not be sorted since were manually defined
-					sort.Sort(networkAwareUtil.ByOrigin(topologyList))
+					sort.Sort(networkawareutil.ByOrigin(topologyList))
 				}
 
 				// Binary search through TopologyList: find the costs for the given Region
-				costs := networkAwareUtil.FindOriginCosts(topologyList, zone)
+				costs := networkawareutil.FindOriginCosts(topologyList, zone)
 
 				// Add Zone Costs
 				for _, c := range costs {
-					costMap[networkAwareUtil.CostKey{ // Add the cost to the map
+					costMap[networkawareutil.CostKey{ // Add the cost to the map
 						Origin:      zone,
 						Destination: c.Destination}] = c.NetworkCost
 				}
@@ -461,25 +461,25 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 		}
 	}
 
-	klog.V(6).Info("costMap: ", costMap)
+	klog.V(4).Info("costMap: ", costMap)
 
 	var cost int64 = 0
 	// calculate accumulated shortest path
 	for _, podAllocated := range scheduledList { // For each pod already allocated
 		if podAllocated.Hostname != "" { // if already updated by the controller
 			for _, d := range dependencyList { // For each pod dependency
-				if podAllocated.WorkloadName == d.WorkloadName { // If the pod allocated is an established dependency
+				if podAllocated.WorkloadName == d.Workload.Name { // If the pod allocated is an established dependency
 					if podAllocated.Hostname == nodeName { // If the Pod hostname is the node being scored
 						cost += SameHostname
 					} else { // If Nodes are not the same
 						// Get NodeInfo from pod Hostname
-						podHostname, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
+						podHostname, err := no.handle.SnapshotSharedLister().NodeInfos().Get(podAllocated.Hostname)
 						if err != nil {
 							return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pod hostname %q from Snapshot: %v", podHostname, err))
 						}
 						// Get zone and region from Pod Hostname
-						regionPodHostname := networkAwareUtil.GetNodeRegion(podHostname.Node())
-						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname.Node())
+						regionPodHostname := networkawareutil.GetNodeRegion(podHostname.Node())
+						zonePodHostname := networkawareutil.GetNodeZone(podHostname.Node())
 
 						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
 							cost += MaxCost
@@ -487,7 +487,7 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 							if zone == zonePodHostname { // If Nodes belong to the same zone
 								cost += SameZone
 							} else { // belong to a different zone
-								value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
+								value, ok := costMap[networkawareutil.CostKey{ // Retrieve the cost from the map (origin: zone, destination: pod zoneHostname)
 									Origin:      zone, // Time Complexity: O(1)
 									Destination: zonePodHostname,
 								}]
@@ -498,7 +498,7 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 								}
 							}
 						} else { // belong to a different region
-							value, ok := costMap[networkAwareUtil.CostKey{ // Retrieve the cost from the map (origin: region, destination: pod regionHostname)
+							value, ok := costMap[networkawareutil.CostKey{ // Retrieve the cost from the map (origin: region, destination: pod regionHostname)
 								Origin:      region, // Time Complexity: O(1)
 								Destination: regionPodHostname,
 							}]
@@ -517,12 +517,12 @@ func (pl *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	// Return Accumulated Cost as score
 	score = cost
 
-	klog.V(6).Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
+	klog.V(4).Infof("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
 	return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 }
 
 // NormalizeScore : normalize scores
-func (pl *NetworkOverhead) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
+func (no *NetworkOverhead) NormalizeScore(ctx context.Context, state *framework.CycleState, pod *v1.Pod, scores framework.NodeScoreList) *framework.Status {
 	// Lower scores correspond to lower latency
 	// Get Min and Max Scores to normalize between framework.MaxNodeScore and framework.MinNodeScore
 	minCost, maxCost := GetMinMaxScores(scores)
@@ -544,7 +544,7 @@ func (pl *NetworkOverhead) NormalizeScore(ctx context.Context, state *framework.
 			scores[i].Score = framework.MaxNodeScore - int64(normCost)
 		}
 	}
-	klog.V(5).Infof("scores: %s", scores)
+	klog.V(4).Infof("scores: %s", scores)
 	return nil
 }
 
@@ -566,10 +566,10 @@ func GetMinMaxScores(scores framework.NodeScoreList) (int64, int64) {
 }
 
 func findAppGroupNetworkOverhead(agName string, n *NetworkOverhead) (*v1alpha1.AppGroup, error) {
-	//klog.V(5).Infof("namespaces: %s", n.namespaces)
+	klog.V(5).Infof("namespaces: %s", n.namespaces)
 	var err error
 	for _, namespace := range n.namespaces {
-		//klog.V(5).Infof("ag.lister: %v", n.agLister)
+		klog.V(5).Infof("ag.lister: %v", n.agLister)
 
 		// AppGroup could not be placed in several namespaces simultaneously
 		lister := n.agLister
@@ -586,10 +586,10 @@ func findAppGroupNetworkOverhead(agName string, n *NetworkOverhead) (*v1alpha1.A
 }
 
 func findNetworkTopologyNetworkOverhead(ntName string, n *NetworkOverhead) (*v1alpha1.NetworkTopology, error) {
-	//klog.V(5).Infof("namespaces: %s", n.namespaces)
+	klog.V(5).Infof("namespaces: %s", n.namespaces)
 	var err error
 	for _, namespace := range n.namespaces {
-		//klog.V(5).Infof("nt.lister: %v", n.ntLister)
+		klog.V(5).Infof("nt.lister: %v", n.ntLister)
 		// NetworkTopology could not be placed in several namespaces simultaneously
 		lister := n.ntLister
 		networkTopology, err := (*lister).NetworkTopologies(namespace).Get(ntName)

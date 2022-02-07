@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,12 +25,18 @@ import (
 	"sort"
 	"time"
 
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
+	//appsinformer "k8s.io/client-go/informers/apps/v1beta2"
+	appslister "k8s.io/client-go/listers/apps/v1beta2"
+	//deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
+
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformer "k8s.io/client-go/informers/core/v1"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -49,20 +55,25 @@ import (
 
 // AppGroupController is a controller that process App groups using provided Handler interface
 type AppGroupController struct {
-	eventRecorder   	record.EventRecorder
-	agQueue         	workqueue.RateLimitingInterface
-	agLister        	schedlister.AppGroupLister
-	podLister       	corelister.PodLister
-	nodeLister      	corelister.NodeLister
-	agListerSynced  	cache.InformerSynced
-	podListerSynced 	cache.InformerSynced
-	agClient        	schedclientset.Interface
+	eventRecorder   		record.EventRecorder
+	agQueue         		workqueue.RateLimitingInterface
+	agLister        		schedlister.AppGroupLister
+	podLister       		corelister.PodLister
+	deploymentLister    	appslister.DeploymentLister
+	serviceLister			corelister.ServiceLister
+	agListerSynced  		cache.InformerSynced
+	podListerSynced 		cache.InformerSynced
+	deploymentListerSynced 	cache.InformerSynced
+	serviceListerSynced		cache.InformerSynced
+	agClient        		schedclientset.Interface
 }
 
 // NewAppGroupController returns a new *AppGroupController
 func NewAppGroupController(client kubernetes.Interface,
 	agInformer schedinformer.AppGroupInformer,
 	podInformer coreinformer.PodInformer,
+	//deploymentInformer appsinformer.DeploymentInformer,
+	//serviceInformer coreinformer.ServiceInformer,
 	agClient schedclientset.Interface) *AppGroupController {
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: client.CoreV1().Events(v1.NamespaceAll)})
@@ -79,7 +90,23 @@ func NewAppGroupController(client kubernetes.Interface,
 		DeleteFunc: ctrl.agDeleted,
 	})
 
-	klog.V(5).InfoS("Setting up Workload event handlers")
+	/*
+	klog.V(5).InfoS("Setting up Deployment event handlers")
+	deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    ctrl.deploymentAdded,
+		UpdateFunc: ctrl.deploymentUpdated,
+		DeleteFunc: ctrl.deploymentDeleted,
+	})
+
+	klog.V(5).InfoS("Setting up Service event handlers")
+	serviceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    ctrl.serviceAdded,
+		UpdateFunc: ctrl.serviceUpdated,
+		DeleteFunc: ctrl.serviceDeleted,
+	})
+	*/
+
+	klog.V(5).InfoS("Setting up Pod event handlers")
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    ctrl.podAdded,
 		UpdateFunc: ctrl.podUpdated,
@@ -88,8 +115,14 @@ func NewAppGroupController(client kubernetes.Interface,
 
 	ctrl.agLister = agInformer.Lister()
 	ctrl.podLister = podInformer.Lister()
+	//ctrl.deploymentLister = deploymentInformer.Lister()
+	//ctrl.serviceLister = serviceInformer.Lister()
+
 	ctrl.agListerSynced = agInformer.Informer().HasSynced
 	ctrl.podListerSynced = podInformer.Informer().HasSynced
+	//ctrl.deploymentListerSynced = deploymentInformer.Informer().HasSynced
+	//ctrl.serviceListerSynced = serviceInformer.Informer().HasSynced
+
 	ctrl.agClient = agClient
 	return ctrl
 }
@@ -98,14 +131,14 @@ func NewAppGroupController(client kubernetes.Interface,
 func (ctrl *AppGroupController) Run(workers int, stopCh <-chan struct{}) {
 	defer ctrl.agQueue.ShutDown()
 
-	klog.InfoS("Starting App Group controller")
+	klog.V(5).InfoS("Starting App Group controller")
 	defer klog.InfoS("Shutting App Group controller")
 
 	if !cache.WaitForCacheSync(stopCh, ctrl.agListerSynced, ctrl.podListerSynced) {
 		klog.Error("Cannot sync caches")
 		return
 	}
-	klog.InfoS("App Group sync finished")
+	klog.V(5).InfoS("App Group sync finished")
 	for i := 0; i < workers; i++ {
 		go wait.Until(ctrl.worker, time.Second, stopCh)
 	}
@@ -123,7 +156,7 @@ func (ctrl *AppGroupController) agAdded(obj interface{}) {
 
 	ag := obj.(*schedv1alpha1.AppGroup)
 
-	// From WorkloadGroup: If startScheduleTime - createTime > 2days, do not enqueue again because pod may have been GCed
+	// From PodGroup: If startScheduleTime - createTime > 2days, do not enqueue again because pod may have been GCed
 	if ag.Status.RunningWorkloads == 0 &&
 		ag.Status.ScheduleStartTime.Sub(ag.CreationTimestamp.Time) > 48*time.Hour {
 		return
@@ -152,7 +185,7 @@ func (ctrl *AppGroupController) agDeleted(obj interface{}) {
 // podAdded reacts to a Workload creation
 func (ctrl *AppGroupController) podAdded(obj interface{}) {
 	pod := obj.(*v1.Pod)
-	agName := util.GetAppGroupLabel(pod)
+	agName := util.GetPodAppGroupLabel(pod)
 	if len(agName) == 0 {
 		return
 	}
@@ -178,6 +211,68 @@ func (ctrl *AppGroupController) podDeleted(obj interface{}) {
 // pgUpdated reacts to a PG update
 func (ctrl *AppGroupController) podUpdated(old, new interface{}) {
 	ctrl.podAdded(new)
+}
+
+// deploymentAdded reacts to a deployment creation
+func (ctrl *AppGroupController) deploymentAdded(obj interface{}) {
+	deployment := obj.(*appsv1beta2.Deployment)
+	agName := util.GetDeploymentAppGroupLabel(deployment)
+	if len(agName) == 0 {
+		return
+	}
+	ag, err := ctrl.agLister.AppGroups(deployment.Namespace).Get(agName)
+	if err != nil {
+		klog.ErrorS(err, "Error while adding deployment")
+		return
+	}
+	klog.V(5).InfoS("Add App group when deployment gets added", "AppGroup", klog.KObj(ag), "deployment", klog.KObj(deployment))
+	ctrl.agAdded(ag)
+}
+
+// deploymentDeleted reacts to a deployment delete
+func (ctrl *AppGroupController) deploymentDeleted(obj interface{}) {
+	_, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		runtime.HandleError(err)
+		return
+	}
+	ctrl.deploymentAdded(obj)
+}
+
+// deploymentUpdated reacts to a deployment update
+func (ctrl *AppGroupController) deploymentUpdated(old, new interface{}) {
+	ctrl.deploymentAdded(new)
+}
+
+// serviceAdded reacts to a service creation
+func (ctrl *AppGroupController) serviceAdded(obj interface{}) {
+	service := obj.(*v1.Service)
+	agName := util.GetServiceAppGroupLabel(service)
+	if len(agName) == 0 {
+		return
+	}
+	ag, err := ctrl.agLister.AppGroups(service.Namespace).Get(agName)
+	if err != nil {
+		klog.ErrorS(err, "Error while adding service")
+		return
+	}
+	klog.V(5).InfoS("Add App group when service gets added", "AppGroup", klog.KObj(ag), "service", klog.KObj(service))
+	ctrl.agAdded(ag)
+}
+
+// serviceDeleted reacts to a deployment delete
+func (ctrl *AppGroupController) serviceDeleted(obj interface{}) {
+	_, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		runtime.HandleError(err)
+		return
+	}
+	ctrl.serviceAdded(obj)
+}
+
+// serviceUpdated reacts to a service update
+func (ctrl *AppGroupController) serviceUpdated(old, new interface{}) {
+	ctrl.serviceAdded(new)
 }
 
 func (ctrl *AppGroupController) worker() {
@@ -235,23 +330,14 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	agCopy := ag.DeepCopy()
 	selector := labels.Set(map[string]string{util.AppGroupLabel: agCopy.Name}).AsSelector()
 
-	/*
-	nodes, err := ctrl.nodeLister.List(labels.Everything())
-	if err != nil {
-		klog.ErrorS(err, "List nodes failed during syncHandler", "appGroup", klog.KObj(agCopy))
-		return err
-	}
-	*/
-
 	pods, err := ctrl.podLister.List(selector)
-
 	if err != nil {
 		klog.ErrorS(err, "List pods for App group failed", "AppGroup", klog.KObj(agCopy))
 		return err
 	}
 	// Update Status of AppGroup CRD
 
-	// Running
+	// Running Workloads
 	var numWorkloadsRunning int32 = 0
 	if len(pods) != 0 {
 		for _, pod := range pods {
@@ -265,47 +351,12 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	agCopy.Status.RunningWorkloads = numWorkloadsRunning
 	klog.V(5).Info("RunningWorkloads: ", numWorkloadsRunning)
 
-	/*
-	// scheduled: ScheduledAppGroup Struct name, replicaID, hostname
-	scheduledList := schedv1alpha1.ScheduledList{}
-
-	for _, p := range pods {
-		ls := p.GetLabels()
-		ip := p.Status.HostIP
-		var hostname string
-
-		for _, n := range nodes {
-			for _, a := range n.Status.Addresses {
-				if a.Address == ip{
-					hostname = n.Name
-					break
-				}
-			}
-			if hostname != ""{
-				break
-			}
-		}
-
-		scheduledInfo := schedv1alpha1.ScheduledInfo{
-			WorkloadName: ls[util.DeploymentLabel],
-			ReplicaID: string(p.GetUID()),
-			Hostname:  hostname,
-		}
-		scheduledList = append(scheduledList, scheduledInfo)
-	}
-
-	klog.V(5).Info("scheduledList: ", scheduledList)
-
-	agCopy.Status.Scheduled = scheduledList
-
-	 */
-
 	if agCopy.Status.TopologyCalculationTime.IsZero() {
-		klog.InfoS("Initial Calculation of Topology order...")
+		klog.V(5).InfoS("Initial Calculation of Topology order...")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Workloads, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
-			agCopy.Status.TopologyOrder = defaultTopologyOrder(agCopy, agCopy.Spec.Workloads)
+			agCopy.Status.TopologyOrder = defaultTopologyOrder(agCopy.Spec.Workloads)
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 
@@ -314,7 +365,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Workloads, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
-			agCopy.Status.TopologyOrder = defaultTopologyOrder(agCopy, agCopy.Spec.Workloads)
+			agCopy.Status.TopologyOrder = defaultTopologyOrder(agCopy.Spec.Workloads)
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 	}
@@ -351,7 +402,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 
 	for _, pod := range podList {
 		for _, dependency := range pod.Dependencies {
-			tree[pod.Workload] = append(tree[pod.Workload], dependency.Workload)
+			tree[pod.Workload.Name] = append(tree[pod.Workload.Name], dependency.Workload.Name)
 		}
 	}
 
@@ -414,7 +465,12 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 	for id, pod := range order {
 		index := int32(id + 1)
 		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
-			Workload: pod,
+			Workload: schedv1alpha1.AppGroupWorkloadInfo{
+				Kind:       "Deployment",
+				Name:       pod,
+				APIVersion: "apps/v1",
+				Namespace:  "default",
+			},
 			Index:   index,
 		})
 	}
@@ -428,7 +484,7 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 }
 
 // Calculate the correct sequence order for deployment to be used by the TopologicalSort Plugin
-func defaultTopologyOrder(agCopy *schedv1alpha1.AppGroup, podList schedv1alpha1.AppGroupWorkloadList) (schedv1alpha1.TopologyList) {
+func defaultTopologyOrder(podList schedv1alpha1.AppGroupWorkloadList) schedv1alpha1.TopologyList {
 	var topologyList schedv1alpha1.TopologyList
 	var i int32
 	i = 1

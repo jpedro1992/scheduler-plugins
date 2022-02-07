@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Kubernetes Authors.
+Copyright 2022 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package util
 
 import (
 	"fmt"
+	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
@@ -57,14 +58,24 @@ func (s ByWorkloadName) Less(i, j int) bool {
 	return s[i].Workload.Name < s[j].Workload.Name
 }
 
-// GetAppGroupLabel get app group from pod annotations
-func GetAppGroupLabel(pod *v1.Pod) string {
+// GetPodAppGroupLabel get app group from pod annotations
+func GetPodAppGroupLabel(pod *v1.Pod) string {
 	return pod.Labels[AppGroupLabel]
 }
 
+// GetServiceAppGroupLabel get app group from pod annotations
+func GetServiceAppGroupLabel(service *v1.Service) string {
+	return service.Labels[AppGroupLabel]
+}
+
+// GetDeploymentAppGroupLabel get app group from pod annotations
+func GetDeploymentAppGroupLabel(deployment *appsv1beta2.Deployment) string {
+	return deployment.Labels[AppGroupLabel]
+}
+
 // GetAppGroupFullName get namespaced group name from pod annotations
-func GetAppGroupFullName(pod *v1.Pod) string {
-	agName := GetAppGroupLabel(pod)
+func GetPodAppGroupFullName(pod *v1.Pod) string {
+	agName := GetPodAppGroupLabel(pod)
 	if len(agName) == 0 {
 		return ""
 	}

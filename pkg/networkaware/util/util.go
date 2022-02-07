@@ -25,7 +25,7 @@ import (
 	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	clientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	informers "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions"
-	schedLister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
+	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
 )
 
 // key for map concerning network costs (origin / destinations)
@@ -162,11 +162,11 @@ func FindPodOrder(t schedulingv1.TopologyList, workloadName string) int32 {
 
 	for low <= high {
 		mid := (low + high) / 2
-		if t[mid].WorkloadName == workloadName {
+		if t[mid].Workload.Name == workloadName {
 			return t[mid].Index // Return the index
-		} else if t[mid].WorkloadName < workloadName {
+		} else if t[mid].Workload.Name < workloadName {
 			low = mid + 1
-		} else if t[mid].WorkloadName > workloadName {
+		} else if t[mid].Workload.Name > workloadName {
 			high = mid - 1
 		}
 	}
@@ -264,7 +264,7 @@ func FindUpperBoundWeightList(weightList []schedulingv1.OriginInfo, nodeName str
 }
 */
 
-func InitAppGroupInformer(masterOverride, kubeConfigPath *string) (*schedLister.AppGroupLister, error) {
+func InitAppGroupInformer(masterOverride, kubeConfigPath *string) (*schedlister.AppGroupLister, error) {
 	kubeConfig, err := clientcmd.BuildConfigFromFlags(*masterOverride, *kubeConfigPath)
 	if err != nil {
 		klog.Errorf("Cannot create kubeconfig based on: %s, %s, %v", *masterOverride, *kubeConfigPath, err)
@@ -289,7 +289,7 @@ func InitAppGroupInformer(masterOverride, kubeConfigPath *string) (*schedLister.
 	return &appGroupLister, nil
 }
 
-func InitNetworkTopologyInformer(masterOverride, kubeConfigPath *string) (*schedLister.NetworkTopologyLister, error) {
+func InitNetworkTopologyInformer(masterOverride, kubeConfigPath *string) (*schedlister.NetworkTopologyLister, error) {
 	kubeConfig, err := clientcmd.BuildConfigFromFlags(*masterOverride, *kubeConfigPath)
 	if err != nil {
 		klog.Errorf("Cannot create kubeconfig based on: %s, %s, %v", *masterOverride, *kubeConfigPath, err)
