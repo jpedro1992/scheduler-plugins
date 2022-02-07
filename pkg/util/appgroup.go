@@ -38,8 +38,6 @@ AppGroupReverseTarjan = "ReverseTarjan"
 AppGroupAlternateKahn   = "AlternateKahn"
 AppGroupAlternateTarjan = "AlternateTarjan"
 
-NodeExternalIP  NodeAddressType = "ExternalIP"
-NodeInternalIP  NodeAddressType = "InternalIP"
 )
 
 type NodeAddressType string
@@ -56,7 +54,7 @@ func (s ByWorkloadName) Swap(i, j int) {
 }
 
 func (s ByWorkloadName) Less(i, j int) bool {
-	return s[i].WorkloadName < s[j].WorkloadName
+	return s[i].Workload.Name < s[j].Workload.Name
 }
 
 // GetAppGroupLabel get app group from pod annotations

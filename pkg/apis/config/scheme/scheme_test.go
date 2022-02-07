@@ -318,7 +318,7 @@ profiles:
     args:
       kubeConfigPath: "/var/run/kubernetes/kube.config"
 `),
-			wantErr: `converting .Profiles[0].PluginConfig[0].Args into internal type: no kind "CapacitySchedulingArgs" is registered for the internal version of group "kubescheduler.config.k8s.io" in scheme "k8s.io/kubernetes/pkg/scheduler/apis/config/v1beta1/conversion.go:41"`,
+			wantErr: `converting .Profiles[0].PluginConfig[0].Args into internal type: no kind "CapacitySchedulingArgs" is registered for the internal version of group "kubescheduler.config.k8s.io" in scheme "pkg/runtime/scheme.go:100"`,
 		},
 		{
 			name: "v1beta2 all plugin args in default profile",
