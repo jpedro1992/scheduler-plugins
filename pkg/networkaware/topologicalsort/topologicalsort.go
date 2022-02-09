@@ -105,8 +105,8 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 		labelsP2 := pInfo2.Pod.GetLabels()
 
 		// Binary search to find both order index since topology list is ordered by Workload Name
-		var orderP1 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP1[util.DeploymentLabel])
-		var orderP2 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP2[util.DeploymentLabel])
+		var orderP1 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP1[util.SelectorLabel])
+		var orderP2 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP2[util.SelectorLabel])
 
 		klog.V(4).Infof("1) Pod %v order: %v", pInfo1.Pod.Name, orderP1)
 		klog.V(4).Infof("2) Pod %v order: %v", pInfo2.Pod.Name, orderP2)

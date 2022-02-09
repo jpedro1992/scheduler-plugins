@@ -27,9 +27,11 @@ import (
 )
 
 const (
-// AppGroupLabel is the default label of app group for network aware plugin
+// AppGroupLabel is the default label of the AppGroup for the network-aware framework
 AppGroupLabel = "app-group.scheduling.sigs.k8s.io"
-DeploymentLabel = "app"
+
+// SelectorLabel is the default selector label for Pods belonging to a given AppGroup (e.g., app = myApp)
+SelectorLabel = "app"
 
 // Topological Sorting algorithms supported by AppGroup
 AppGroupKahnSort      = "KahnSort"
@@ -39,6 +41,11 @@ AppGroupReverseTarjan = "ReverseTarjan"
 AppGroupAlternateKahn   = "AlternateKahn"
 AppGroupAlternateTarjan = "AlternateTarjan"
 
+// Different Workload types supported by the AppGroup controller
+AppGroupKindDeployment = "Deployment"
+AppGroupKindReplicaSet = "ReplicaSet"
+AppGroupKindStatefulSet = "StatefulSet"
+AppGroupKindService = "Service"
 )
 
 type NodeAddressType string
@@ -56,6 +63,39 @@ func (s ByWorkloadName) Swap(i, j int) {
 
 func (s ByWorkloadName) Less(i, j int) bool {
 	return s[i].Workload.Name < s[j].Workload.Name
+}
+
+// Sort AppGroupWorkloadInfo by Workload Name
+type ByName []schedulingv1.AppGroupWorkload
+
+func (s ByName) Len() int {
+	return len(s)
+}
+
+func (s ByName) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s ByName) Less(i, j int) bool {
+	return s[i].Workload.Name < s[j].Workload.Name
+}
+
+func FindWorkloadByName(workloadList schedulingv1.AppGroupWorkloadList, name string) schedulingv1.AppGroupWorkloadInfo {
+	low := 0
+	high := len(workloadList) - 1
+
+	for low <= high {
+		mid := (low + high) / 2
+		if workloadList[mid].Workload.Name == name {
+			return workloadList[mid].Workload // Return the Costs
+		} else if workloadList[mid].Workload.Name < name {
+			low = mid + 1
+		} else if workloadList[mid].Workload.Name > name {
+			high = mid - 1
+		}
+	}
+	// Workload Info was not found
+	return schedulingv1.AppGroupWorkloadInfo{}
 }
 
 // GetPodAppGroupLabel get app group from pod annotations
@@ -84,7 +124,7 @@ func GetPodAppGroupFullName(pod *v1.Pod) string {
 
 // GetDeploymentName get workloadName from pod annotations
 func GetDeploymentName(pod *v1.Pod) string {
-	return pod.Labels[DeploymentLabel]
+	return pod.Labels[SelectorLabel]
 }
 
 // Implementation of Topology Sorting algorithms based on https://github.com/otaviokr/topological-sort

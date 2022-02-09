@@ -257,7 +257,7 @@ func makePodsAppGroup(podNames []string, agName string, phase v1.PodPhase) []*v1
 	i := 0
 	for _, name := range podNames {
 		pod := st.MakePod().Namespace("default").Name(name + fmt.Sprint(i)).Obj()
-		pod.Labels = map[string]string{util.AppGroupLabel: agName, util.DeploymentLabel: name}
+		pod.Labels = map[string]string{util.AppGroupLabel: agName, util.SelectorLabel: name}
 		pod.Status.Phase = phase
 		pds = append(pds, pod)
 		i += i

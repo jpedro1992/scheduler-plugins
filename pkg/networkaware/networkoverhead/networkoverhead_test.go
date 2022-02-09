@@ -1525,7 +1525,7 @@ func randomInt(min int, max int) int {
 func makePod(name string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
 	label := make(map[string]string)
 	label[util.AppGroupLabel] = appGroup
-	label[util.DeploymentLabel] = name
+	label[util.SelectorLabel] = name
 
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1550,7 +1550,7 @@ func makePod(name string, priority int32, appGroup string, requests, limits v1.R
 func makePodAllocated(name string, hostname string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
 	label := make(map[string]string)
 	label[util.AppGroupLabel] = appGroup
-	label[util.DeploymentLabel] = name
+	label[util.SelectorLabel] = name
 
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

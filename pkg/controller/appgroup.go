@@ -25,9 +25,9 @@ import (
 	"sort"
 	"time"
 
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
+	//appsv1beta2 "k8s.io/api/apps/v1beta2"
 	//appsinformer "k8s.io/client-go/informers/apps/v1beta2"
-	appslister "k8s.io/client-go/listers/apps/v1beta2"
+	//appslister "k8s.io/client-go/listers/apps/v1beta2"
 	//deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 
 	v1 "k8s.io/api/core/v1"
@@ -51,6 +51,7 @@ import (
 	schedinformer "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions/scheduling/v1alpha1"
 	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
+
 )
 
 // AppGroupController is a controller that process App groups using provided Handler interface
@@ -59,12 +60,12 @@ type AppGroupController struct {
 	agQueue         		workqueue.RateLimitingInterface
 	agLister        		schedlister.AppGroupLister
 	podLister       		corelister.PodLister
-	deploymentLister    	appslister.DeploymentLister
-	serviceLister			corelister.ServiceLister
+	//deploymentLister    	appslister.DeploymentLister
+	//serviceLister			corelister.ServiceLister
 	agListerSynced  		cache.InformerSynced
 	podListerSynced 		cache.InformerSynced
-	deploymentListerSynced 	cache.InformerSynced
-	serviceListerSynced		cache.InformerSynced
+	//deploymentListerSynced 	cache.InformerSynced
+	//serviceListerSynced		cache.InformerSynced
 	agClient        		schedclientset.Interface
 }
 
@@ -156,7 +157,7 @@ func (ctrl *AppGroupController) agAdded(obj interface{}) {
 
 	ag := obj.(*schedv1alpha1.AppGroup)
 
-	// From PodGroup: If startScheduleTime - createTime > 2days, do not enqueue again because pod may have been GCed
+	// If startScheduleTime - createTime > 2days, do not enqueue again because pod may have been GCed
 	if ag.Status.RunningWorkloads == 0 &&
 		ag.Status.ScheduleStartTime.Sub(ag.CreationTimestamp.Time) > 48*time.Hour {
 		return
@@ -213,6 +214,7 @@ func (ctrl *AppGroupController) podUpdated(old, new interface{}) {
 	ctrl.podAdded(new)
 }
 
+/*
 // deploymentAdded reacts to a deployment creation
 func (ctrl *AppGroupController) deploymentAdded(obj interface{}) {
 	deployment := obj.(*appsv1beta2.Deployment)
@@ -274,6 +276,8 @@ func (ctrl *AppGroupController) serviceDeleted(obj interface{}) {
 func (ctrl *AppGroupController) serviceUpdated(old, new interface{}) {
 	ctrl.serviceAdded(new)
 }
+*/
+
 
 func (ctrl *AppGroupController) worker() {
 	for ctrl.processNextWorkItem() {
@@ -369,6 +373,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 		}
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 	}
+	klog.V(5).Info("ag to patch: ", agCopy)
 
 	err = ctrl.patchAppGroup(ag, agCopy)
 	if err == nil {
@@ -394,15 +399,15 @@ func (ctrl *AppGroupController) patchAppGroup(old, new *schedv1alpha1.AppGroup) 
 }
 
 // Calculate the correct sequence order for deployment to be used by the TopologicalSort Plugin
-func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, podList schedv1alpha1.AppGroupWorkloadList, err error) (schedv1alpha1.TopologyList, error) {
+func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, workloadList schedv1alpha1.AppGroupWorkloadList, err error) (schedv1alpha1.TopologyList, error) {
 
 	var order []string
 	var topologyList schedv1alpha1.TopologyList
 	tree := map[string][]string{}
 
-	for _, pod := range podList {
-		for _, dependency := range pod.Dependencies {
-			tree[pod.Workload.Name] = append(tree[pod.Workload.Name], dependency.Workload.Name)
+	for _, w := range workloadList {
+		for _, dependency := range w.Dependencies {
+			tree[w.Workload.Name] = append(tree[w.Workload.Name], dependency.Workload.Name)
 		}
 	}
 
@@ -462,21 +467,27 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 		}
 	}
 
-	for id, pod := range order {
+	// Sort workload data by name
+	sort.Sort(util.ByName(agCopy.Spec.Workloads))
+
+	for id, workloadName := range order {
 		index := int32(id + 1)
+		// Find workload data by name (Binary Search)
+		w := util.FindWorkloadByName(agCopy.Spec.Workloads, workloadName)
+
 		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
 			Workload: schedv1alpha1.AppGroupWorkloadInfo{
-				Kind:       "Deployment",
-				Name:       pod,
-				APIVersion: "apps/v1",
-				Namespace:  "default",
+				Kind:       w.Kind,
+				Name:       w.Name,
+				APIVersion: w.APIVersion,
+				Namespace:  w.Namespace,
 			},
 			Index:   index,
 		})
 	}
 
 	// Sort TopologyList by Workload Name
-	klog.V(5).Infof("Sort Topology List by pod name... ")
+	klog.V(5).Infof("Sort Topology List by workload name... ")
 	sort.Sort(util.ByWorkloadName(topologyList))
 
 	klog.V(5).Info("topologyList: ", topologyList)
@@ -484,20 +495,20 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, po
 }
 
 // Calculate the correct sequence order for deployment to be used by the TopologicalSort Plugin
-func defaultTopologyOrder(podList schedv1alpha1.AppGroupWorkloadList) schedv1alpha1.TopologyList {
+func defaultTopologyOrder(workloadList schedv1alpha1.AppGroupWorkloadList) schedv1alpha1.TopologyList {
 	var topologyList schedv1alpha1.TopologyList
 	var i int32
 	i = 1
-	for _, pod := range podList {
+	for _, w := range workloadList {
 		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
-			Workload: pod.Workload,
+			Workload: w.Workload,
 			Index:   i,
 		})
 		i+=1
 	}
 
 	// Sort TopologyList by Workload Name
-	klog.V(5).Infof("Sort Topology List by pod name... ")
+	klog.V(5).Infof("Sort Topology List by workload name... ")
 	sort.Sort(util.ByWorkloadName(topologyList))
 
 	klog.V(5).Info("topologyList: ", topologyList)

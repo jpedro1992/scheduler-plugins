@@ -18,6 +18,7 @@ package scheme
 
 import (
 	"bytes"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/networkoverhead"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/apis/config"
 	"sigs.k8s.io/scheduler-plugins/pkg/apis/config/v1beta1"
 	"sigs.k8s.io/scheduler-plugins/pkg/coscheduling"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/topologicalsort"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesources"
 	"sigs.k8s.io/scheduler-plugins/pkg/preemptiontoleration"
 	"sigs.k8s.io/scheduler-plugins/pkg/trimaran/loadvariationriskbalancing"
@@ -91,6 +93,18 @@ profiles:
       safeVarianceMargin: 1.0
       safeVarianceSensitivity: 1.0
       watcherAddress: http://deadbeef:2020
+  - name: TopologicalSort
+    args:
+      kubeConfigPath: "/var/run/kubernetes/kube.config"
+      namespaces:
+      - "networkAware"
+  - name: NetworkOverhead
+    args:
+      kubeConfigPath: "/var/run/kubernetes/kube.config"
+      namespaces:
+      - "networkAware"
+      weightsName: "netCosts"
+      networkTopologyName: "net-topology-v1"
 `),
 			wantProfiles: []defaultconfig.KubeSchedulerProfile{
 				{
@@ -139,6 +153,22 @@ profiles:
 									Type:    config.Prometheus,
 									Address: "http://prometheus-k8s.monitoring.svc.cluster.local:9090",
 								},
+							},
+						},
+						{
+							Name: topologicalsort.Name,
+							Args: &config.TopologicalSortArgs{
+								KubeConfigPath: "/var/run/kubernetes/kube.config",
+								Namespaces:     []string{"networkAware"},
+							},
+						},
+						{
+							Name: networkoverhead.Name,
+							Args: &config.NetworkOverheadArgs{
+								KubeConfigPath:      "/var/run/kubernetes/kube.config",
+								Namespaces:          []string{"networkAware"},
+								WeightsName:         "netCosts",
+								NetworkTopologyName: "net-topology-v1",
 							},
 						},
 						{
@@ -198,6 +228,10 @@ profiles:
     args:
   - name: LoadVariationRiskBalancing
     args:
+  - name: TopologicalSort
+    args:
+  - name: NetworkOverhead
+    args:
 `),
 			wantProfiles: []defaultconfig.KubeSchedulerProfile{
 				{
@@ -248,6 +282,22 @@ profiles:
 									Address: "",
 									Token:   "",
 								},
+							},
+						},
+						{
+							Name: topologicalsort.Name,
+							Args: &config.TopologicalSortArgs{
+								KubeConfigPath: "/etc/kubernetes/scheduler.conf",
+								Namespaces:     []string{"default"},
+							},
+						},
+						{
+							Name: networkoverhead.Name,
+							Args: &config.NetworkOverheadArgs{
+								KubeConfigPath:      "/etc/kubernetes/scheduler.conf",
+								Namespaces:          []string{"default"},
+								WeightsName:         "UserDefined",
+								NetworkTopologyName: "nt-default",
 							},
 						},
 						{
@@ -362,6 +412,16 @@ profiles:
     args:
       minCandidateNodesPercentage: 20
       minCandidateNodesAbsolute: 200
+  - name: TopologicalSort
+    args:
+      namespaces:
+      - "networkAware"
+  - name: NetworkOverhead
+    args:
+      namespaces:
+      - "networkAware"
+      weightsName: "netCosts"
+      networkTopologyName: "net-topology-v1"
 `),
 			wantProfiles: []defaultconfig.KubeSchedulerProfile{
 				{
@@ -415,6 +475,22 @@ profiles:
 						{
 							Name: preemptiontoleration.Name,
 							Args: &config.PreemptionTolerationArgs{MinCandidateNodesPercentage: 20, MinCandidateNodesAbsolute: 200},
+						},
+						{
+							Name: topologicalsort.Name,
+							Args: &config.TopologicalSortArgs{
+								KubeConfigPath: "/etc/kubernetes/scheduler.conf",
+								Namespaces:     []string{"networkAware"},
+							},
+						},
+						{
+							Name: networkoverhead.Name,
+							Args: &config.NetworkOverheadArgs{
+								KubeConfigPath:      "/etc/kubernetes/scheduler.conf",
+								Namespaces:          []string{"networkAware"},
+								WeightsName:         "netCosts",
+								NetworkTopologyName: "net-topology-v1",
+							},
 						},
 						{
 							Name: "DefaultPreemption",
@@ -471,6 +547,10 @@ profiles:
     args:
   - name: PreemptionToleration
     args:
+  - name: TopologicalSort
+    args:
+  - name: NetworkOverhead
+    args:
 `),
 			wantProfiles: []defaultconfig.KubeSchedulerProfile{
 				{
@@ -526,6 +606,22 @@ profiles:
 						{
 							Name: preemptiontoleration.Name,
 							Args: &config.PreemptionTolerationArgs{MinCandidateNodesPercentage: 10, MinCandidateNodesAbsolute: 100},
+						},
+						{
+							Name: topologicalsort.Name,
+							Args: &config.TopologicalSortArgs{
+								KubeConfigPath: "/etc/kubernetes/scheduler.conf",
+								Namespaces:     []string{"default"},
+							},
+						},
+						{
+							Name: networkoverhead.Name,
+							Args: &config.NetworkOverheadArgs{
+								KubeConfigPath:      "/etc/kubernetes/scheduler.conf",
+								Namespaces:          []string{"default"},
+								WeightsName:         "UserDefined",
+								NetworkTopologyName: "nt-default",
+							},
 						},
 						{
 							Name: "DefaultPreemption",
