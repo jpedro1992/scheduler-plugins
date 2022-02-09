@@ -8,263 +8,302 @@ spec:
   workloads:
     - workload:
         kind: Deployment
+        name: frontend-deployment
+        selector: frontend
         apiVersion: apps/v1
         namespace: default
-        name: frontend
       dependencies:
         - workload:
             kind: Deployment
+            name: cartservice-deployment
+            selector: cartservice
             apiVersion: apps/v1
             namespace: default
-            name: cartservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: productcatalogservice-deployment
+            selector: productcatalogservice
             apiVersion: apps/v1
             namespace: default
-            name: productcatalogservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: currencyservice-deployment
+            selector: currencyservice
             apiVersion: apps/v1
             namespace: default
-            name: currencyservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: shippingservice-deployment
+            selector: shippingservice
             apiVersion: apps/v1
             namespace: default
-            name: shippingservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: checkoutservice-deployment
+            selector: checkoutservice
             apiVersion: apps/v1
             namespace: default
-            name: checkoutservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: adservice-deployment
+            selector: adservice
             apiVersion: apps/v1
             namespace: default
-            name: adservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: cartservice-deployment
+        selector: cartservice
         apiVersion: apps/v1
         namespace: default
-        name: cartservice
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
-        - workload: redis-cart
+        - workload:
             kind: Deployment
+            name: redis-cart-deployment
+            selector: redis-cart
             apiVersion: apps/v1
             namespace: default
-            name: redis-cart
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: productcatalogservice-deployment
+        selector: productcatalogservice
         apiVersion: apps/v1
         namespace: default
-        name: productcatalogservice
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: checkoutservice-deployment
+            selector: checkoutservice
             apiVersion: apps/v1
             namespace: default
-            name: checkoutservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: recommendationservice-deployment
+            selector: recommendationservice
             apiVersion: apps/v1
             namespace: default
-            name: recommendationservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: currencyservice-deployment
+        selector: currencyservice
         apiVersion: apps/v1
         namespace: default
-        name: currencyservice
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: checkoutservice-deployment
+            selector: checkoutservice
             apiVersion: apps/v1
             namespace: default
-            name: checkoutservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: paymentservice-deployment
+        selector: paymentservice
         apiVersion: apps/v1
         namespace: default
-        name: paymentservice
       dependencies:
         - workload:
             kind: Deployment
+            name: checkoutservice-deployment
+            selector: checkoutservice
             apiVersion: apps/v1
             namespace: default
-            name: checkoutservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: shippingservice-deployment
+        selector: shippingservice
         apiVersion: apps/v1
         namespace: default
-        name: shippingservice
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: checkoutservice-deployment
+            selector: checkoutservice
             apiVersion: apps/v1
             namespace: default
-            name: checkoutservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: emailservice-deployment
+        selector: emailservice
         apiVersion: apps/v1
         namespace: default
-        name: emailservice
       dependencies:
         - workload:
             kind: Deployment
+            name: checkoutservice-deployment
+            selector: checkoutservice
             apiVersion: apps/v1
             namespace: default
-            name: checkoutservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: checkoutservice-deployment
+        selector: checkoutservice
         apiVersion: apps/v1
         namespace: default
-        name: checkoutservice
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: cartservice-deployment
+            selector: cartservice
             apiVersion: apps/v1
             namespace: default
-            name: cartservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: productcatalogservice-deployment
+            selector: productcatalogservice
             apiVersion: apps/v1
             namespace: default
-            name: productcatalogservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: currencyservice-deployment
+            selector: currencyservice
             apiVersion: apps/v1
             namespace: default
-            name: currencyservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: paymentservice-deployment
+            selector: paymentservice
             apiVersion: apps/v1
             namespace: default
-            name: paymentservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: shippingservice-deployment
+            selector: shippingservice
             apiVersion: apps/v1
             namespace: default
-            name: shippingservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: emailservice-deployment
+            selector: emailservice
             apiVersion: apps/v1
             namespace: default
-            name: emailservice
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: recommendationservice-deployment
+        selector: recommendationservice
         apiVersion: apps/v1
         namespace: default
-        name: recommendationservice
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
         - workload:
             kind: Deployment
+            name: productcatalogservice-deployment
+            selector: productcatalogservice
             apiVersion: apps/v1
             namespace: default
-            name: productcatalogservice
-          minBandwidth: "100Mi"
-          maxNetworkCost: 80
-    - workload:
-        kind: Deployment
-        apiVersion: apps/v1
-        namespace: default
-        name: adservice
-      dependencies:
-        - workload:
-            kind: Deployment
-            apiVersion: apps/v1
-            namespace: default
-            name: frontend
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: adservice-deployment
+        selector: adservice
         apiVersion: apps/v1
         namespace: default
-        name: redis-cart
       dependencies:
         - workload:
             kind: Deployment
+            name: frontend-deployment
+            selector: frontend
             apiVersion: apps/v1
             namespace: default
-            name: cartservice
+          minBandwidth: "100Mi"
+          maxNetworkCost: 80
+    - workload:
+        kind: Deployment
+        name: redis-cart-deployment
+        selector: redis-cart
+        apiVersion: apps/v1
+        namespace: default
+      dependencies:
+        - workload:
+            kind: Deployment
+            name: cartservice-deployment
+            selector: cartservice
+            apiVersion: apps/v1
+            namespace: default
           minBandwidth: "100Mi"
           maxNetworkCost: 80

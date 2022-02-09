@@ -185,7 +185,7 @@ type NetworkOverheadArgs struct {
 	KubeConfigPath *string `json:"kubeConfigPath,omitempty"`
 
 	// MasterOverride is the url of api-server
-	MasterOverride *string  `json:"masterOverride,omitempty"`
+	MasterOverride *string `json:"masterOverride,omitempty"`
 
 	// Namespaces to be considered by NetworkMinCost plugin
 	Namespaces []string `json:"namespaces,omitempty"`

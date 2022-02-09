@@ -36,7 +36,6 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	fake "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned/fake"
 	schedinformer "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions"
-	"sigs.k8s.io/scheduler-plugins/pkg/util"
 	"testing"
 	"time"
 )
@@ -78,38 +77,30 @@ func TestNetworkOverheadScore(t *testing.T) {
 			TopologySortingAlgorithm: "KahnSort",
 			Workloads: v1alpha1.AppGroupWorkloadList{
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"},
 					Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{
-						Workload:       v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"},
-						MaxNetworkCost: 15},
-					},
-				},
+						Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}}}},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"},
 					Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{
-						Workload:       v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"},
-						MaxNetworkCost: 8},
-					},
-				},
+						Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}}}},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
 			},
 		},
 		Status: v1alpha1.AppGroupStatus{
 			RunningWorkloads:  3,
 			ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
-			TopologyOrder: v1alpha1.TopologyList{
+			TopologyOrder: v1alpha1.AppGroupTopologyList{
 				v1alpha1.AppGroupTopologyInfo{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
 				v1alpha1.AppGroupTopologyInfo{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
 				v1alpha1.AppGroupTopologyInfo{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
 			},
 		},
 	}
-
-	WorkloadNames := []string{"P1", "P2", "P3"}
 
 	// Create Network Topology CRD
 	networkTopology := &v1alpha1.NetworkTopology{
@@ -117,26 +108,26 @@ func TestNetworkOverheadScore(t *testing.T) {
 		Spec: v1alpha1.NetworkTopologySpec{
 			Weights: v1alpha1.WeightList{
 				v1alpha1.WeightInfo{Name: "UserDefined",
-					CostList: v1alpha1.CostList{
-						v1alpha1.TopologyInfo{
-							TopologyKey: "topology.kubernetes.io/region",
-							OriginCosts: v1alpha1.OriginList{
-								v1alpha1.OriginInfo{
-									Origin: "us-west-1",
-									Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
-								v1alpha1.OriginInfo{
-									Origin: "us-east-1",
-									Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
-							}},
+					TopologyList: v1alpha1.TopologyList{
 						v1alpha1.TopologyInfo{
 							TopologyKey: "topology.kubernetes.io/zone",
-							OriginCosts: v1alpha1.OriginList{
-								v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
-								v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
-								v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
-								v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
+							OriginList: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "Z2", CostList: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
+								v1alpha1.OriginInfo{Origin: "Z3", CostList: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
+								v1alpha1.OriginInfo{Origin: "Z1", CostList: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
+								v1alpha1.OriginInfo{Origin: "Z4", CostList: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
 							},
 						},
+						v1alpha1.TopologyInfo{
+							TopologyKey: "topology.kubernetes.io/region",
+							OriginList: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{
+									Origin:   "us-west-1",
+									CostList: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
+								v1alpha1.OriginInfo{
+									Origin:   "us-east-1",
+									CostList: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
+							}},
 					},
 				},
 			},
@@ -164,33 +155,31 @@ func TestNetworkOverheadScore(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               	string
-		agName             	string
-		dependenciesNum 	int32
-		WorkloadNames       []string
-		pods                []*v1.Pod
-		appGroup           	*v1alpha1.AppGroup
-		networkTopology    	*v1alpha1.NetworkTopology
-		nodes              	[]*v1.Node
-		pod               	 *v1.Pod
-		want               	*framework.Status
-		wantedScoresBefore 	framework.NodeScoreList
-		wantedScoresAfter  	framework.NodeScoreList
-		nodeToScore        	*v1.Node
+		name               string
+		agName             string
+		dependenciesNum    int32
+		pods               []*v1.Pod
+		appGroup           *v1alpha1.AppGroup
+		networkTopology    *v1alpha1.NetworkTopology
+		nodes              []*v1.Node
+		pod                *v1.Pod
+		want               *framework.Status
+		wantedScoresBefore framework.NodeScoreList
+		wantedScoresAfter  framework.NodeScoreList
+		nodeToScore        *v1.Node
 	}{
 		{
 			name:            "AppGroup: basic, P1 to allocate, 8 nodes to score",
 			agName:          "basic",
 			appGroup:        basicAppGroup,
 			dependenciesNum: 5,
-			WorkloadNames:   WorkloadNames,
 			pods: []*v1.Pod{
-				makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
-				makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
-				makePodAllocated("P3", "n-1", 0, "basic", nil, nil),
+				makePodAllocated("P1", "P1-deployment", "n-2", 0, "basic", nil, nil),
+				makePodAllocated("P2", "P2-deployment", "n-5", 0, "basic", nil, nil),
+				makePodAllocated("P3", "P3-deployment", "n-1", 0, "basic", nil, nil),
 			},
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "basic", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "basic", nil, nil),
 			nodes:           nodes,
 			want:            nil,
 			wantedScoresBefore: framework.NodeScoreList{
@@ -219,14 +208,14 @@ func TestNetworkOverheadScore(t *testing.T) {
 			agName:          "basic",
 			appGroup:        basicAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P2", 0, "basic", nil, nil),
+			pod:             makePod("P2", "P2-deployment", 0, "basic", nil, nil),
 			pods: []*v1.Pod{
-				makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
-				makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
-				makePodAllocated("P3", "n-1", 0, "basic", nil, nil),
+				makePodAllocated("P1", "P1-deployment", "n-2", 0, "basic", nil, nil),
+				makePodAllocated("P2", "P2-deployment", "n-5", 0, "basic", nil, nil),
+				makePodAllocated("P3", "P3-deployment", "n-1", 0, "basic", nil, nil),
 			},
-			nodes:           nodes,
-			want:            nil,
+			nodes: nodes,
+			want:  nil,
 			wantedScoresBefore: framework.NodeScoreList{
 				framework.NodeScore{Name: nodes[0].Name, Score: 0},
 				framework.NodeScore{Name: nodes[1].Name, Score: 1},
@@ -254,13 +243,13 @@ func TestNetworkOverheadScore(t *testing.T) {
 			appGroup:        basicAppGroup,
 			networkTopology: networkTopology,
 			pods: []*v1.Pod{
-				makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
-				makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
-				makePodAllocated("P3", "n-1", 0, "basic", nil, nil),
+				makePodAllocated("P1", "P1-deployment", "n-2", 0, "basic", nil, nil),
+				makePodAllocated("P2", "P2-deployment", "n-5", 0, "basic", nil, nil),
+				makePodAllocated("P3", "P3-deployment", "n-1", 0, "basic", nil, nil),
 			},
-			pod:             makePod("P3", 0, "basic", nil, nil),
-			nodes:           nodes,
-			want:            nil,
+			pod:   makePod("P3", "P3-deployment", 0, "basic", nil, nil),
+			nodes: nodes,
+			want:  nil,
 			wantedScoresBefore: framework.NodeScoreList{
 				framework.NodeScore{Name: nodes[0].Name, Score: 0},
 				framework.NodeScore{Name: nodes[1].Name, Score: 0},
@@ -312,7 +301,7 @@ func TestNetworkOverheadScore(t *testing.T) {
 			podLister := podInformer.Lister()
 			informerFactory.Start(ctx.Done())
 
-			for _, p := range tt.pods{
+			for _, p := range tt.pods {
 				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
 				if err != nil {
 					t.Fatalf("Failed to create Workload %q: %v", p.Name, err)
@@ -346,7 +335,7 @@ func TestNetworkOverheadScore(t *testing.T) {
 
 			state := framework.NewCycleState()
 
-				//t.Logf("WorkloadsScheduled: %v", tt.appGroup.Status.WorkloadsScheduled)
+			//t.Logf("WorkloadsScheduled: %v", tt.appGroup.Status.WorkloadsScheduled)
 			for _, n := range nodes {
 				score, gotStatus := pl.Score(
 					ctx,
@@ -390,96 +379,95 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 		Spec: v1alpha1.AppGroupSpec{NumMembers: 11, TopologySortingAlgorithm: "KahnSort",
 			Workloads: v1alpha1.AppGroupWorkloadList{
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1",APIVersion: "apps/v1", Namespace: "default"}, // frontend
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, // frontend
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10",APIVersion: "apps/v1", Namespace:  "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8-deployment", Selector: "P8", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}},
 					},
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, // cartService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}, // cartService
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}},
 					},
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, // productCatalogService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}, // productCatalogService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, // currencyService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}, // currencyService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, // paymentService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5-deployment", Selector: "P5", APIVersion: "apps/v1", Namespace: "default"}, // paymentService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, // shippingService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}, // shippingService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, // emailService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7-deployment", Selector: "P7", APIVersion: "apps/v1", Namespace: "default"}, // emailService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, // checkoutService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8-deployment", Selector: "P8", APIVersion: "apps/v1", Namespace: "default"}, // checkoutService
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5-deployment", Selector: "P5", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7-deployment", Selector: "P7", APIVersion: "apps/v1", Namespace: "default"}},
 					},
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, // recommendationService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}, // recommendationService
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
 					}},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default",}, // adService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}, // adService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}, // redis-cart
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}, // redis-cart
 				},
 			},
 		},
 		Status: v1alpha1.AppGroupStatus{
 			ScheduleStartTime:       metav1.Time{time.Now()},
 			TopologyCalculationTime: metav1.Time{time.Now()},
-			TopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, Index: 4},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, Index: 6},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, Index: 7},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, Index: 8},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 9},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 10},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
+			TopologyOrder: v1alpha1.AppGroupTopologyList{
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8-deployment", Selector: "P8", APIVersion: "apps/v1", Namespace: "default"}, Index: 4},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7-deployment", Selector: "P7", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}, Index: 6},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5-deployment", Selector: "P5", APIVersion: "apps/v1", Namespace: "default"}, Index: 7},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}, Index: 8},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 9},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 10},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
 			},
 		},
 	}
 
-	WorkloadNames := []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"}
 	regionNames := []string{"R1", "R2", "R3", "R4", "R5"}
 	zoneNames := []string{"Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10"}
 
-	pods:= []*v1.Pod{
-		makePodAllocated("P1", "n-2", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P2", "n-5", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P3", "n-1", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P4", "n-9", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P5", "n-5", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P6", "n-1", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P7", "n-2", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P8", "n-5", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P9", "n-1", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P10", "n-2", 0, "OnlineBoutique", nil, nil),
+	pods := []*v1.Pod{
+		makePodAllocated("P1", "P1-deployment", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P2", "P2-deployment", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P3", "P3-deployment", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P4", "P4-deployment", "n-9", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P5", "P5-deployment", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P6", "P6-deployment", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P7", "P7-deployment", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P8", "P8-deployment", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P9", "P9-deployment", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P10", "P10-deployment", "n-2", 0, "OnlineBoutique", nil, nil),
 	}
 
 	// Create Network Topology CRD
@@ -488,35 +476,35 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 		Spec: v1alpha1.NetworkTopologySpec{
 			Weights: v1alpha1.WeightList{
 				v1alpha1.WeightInfo{Name: "UserDefined",
-					CostList: v1alpha1.CostList{
+					TopologyList: v1alpha1.TopologyList{
 						v1alpha1.TopologyInfo{
 							TopologyKey: "topology.kubernetes.io/region",
-							OriginCosts: v1alpha1.OriginList{
-								v1alpha1.OriginInfo{Origin: "R1", Costs: []v1alpha1.CostInfo{
+							OriginList: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "R1", CostList: []v1alpha1.CostInfo{
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
 									{Destination: "R4", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R2", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R2", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
 									{Destination: "R4", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R3", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R3", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R4", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R4", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R4", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R5", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R5", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
@@ -525,53 +513,53 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 							}},
 						v1alpha1.TopologyInfo{
 							TopologyKey: "topology.kubernetes.io/region",
-							OriginCosts: v1alpha1.OriginList{
-								v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{
+							OriginList: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "Z1", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z2", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z3", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z4", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z5", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z5", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z6", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z6", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z7", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z7", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z8", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z8", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z9", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z9", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z10", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z10", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}},
@@ -589,7 +577,7 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 		nodesNum        int64
 		dependenciesNum int32
 		agName          string
-		WorkloadNames        []string
+		WorkloadNames   []string
 		regionNames     []string
 		zoneNames       []string
 		appGroup        *v1alpha1.AppGroup
@@ -602,12 +590,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        10,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -615,12 +602,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        100,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -628,12 +614,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        500,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -641,12 +626,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        1000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -654,12 +638,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        2000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -667,12 +650,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        3000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -680,12 +662,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        5000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -693,12 +674,11 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			nodesNum:        10000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			WorkloadNames:   WorkloadNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 	}
@@ -736,7 +716,7 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			podLister := podInformer.Lister()
 			informerFactory.Start(ctx.Done())
 
-			for _, p := range tt.pods{
+			for _, p := range tt.pods {
 				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
 				if err != nil {
 					b.Fatalf("Failed to create Workload %q: %v", p.Name, err)
@@ -797,41 +777,35 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			TopologySortingAlgorithm: "KahnSort",
 			Workloads: v1alpha1.AppGroupWorkloadList{
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"},
 					Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{
-						Workload:       v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"},
-						MaxNetworkCost: 15},
-					},
-				},
+						Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}}}},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"},
 					Dependencies: v1alpha1.DependenciesList{v1alpha1.DependenciesInfo{
-						Workload:       v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"},
-						MaxNetworkCost: 8},
-					},
-				},
+						Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}}}},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
 			},
 		},
 		Status: v1alpha1.AppGroupStatus{
 			RunningWorkloads:  3,
 			ScheduleStartTime: metav1.Time{time.Now()}, TopologyCalculationTime: metav1.Time{time.Now()},
-			TopologyOrder: v1alpha1.TopologyList{
+			TopologyOrder: v1alpha1.AppGroupTopologyList{
 				v1alpha1.AppGroupTopologyInfo{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
 				v1alpha1.AppGroupTopologyInfo{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
 				v1alpha1.AppGroupTopologyInfo{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
 			},
 		},
 	}
 
-	pods:= []*v1.Pod{
-		makePodAllocated("P1", "n-2", 0, "basic", nil, nil),
-		makePodAllocated("P2", "n-5", 0, "basic", nil, nil),
-		makePodAllocated("P3", "n-8", 0, "basic", nil, nil),
+	pods := []*v1.Pod{
+		makePodAllocated("P1", "P1-deployment", "n-2", 0, "basic", nil, nil),
+		makePodAllocated("P2", "P2-deployment", "n-5", 0, "basic", nil, nil),
+		makePodAllocated("P3", "P3-deployment", "n-8", 0, "basic", nil, nil),
 	}
 
 	// Create Network Topology CRD
@@ -839,20 +813,20 @@ func TestNetworkOverheadFilter(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "nt-test", Namespace: "default"},
 		Spec: v1alpha1.NetworkTopologySpec{
 			Weights: v1alpha1.WeightList{
-				v1alpha1.WeightInfo{Name: "UserDefined", CostList: v1alpha1.CostList{
+				v1alpha1.WeightInfo{Name: "UserDefined", TopologyList: v1alpha1.TopologyList{
 					v1alpha1.TopologyInfo{
 						TopologyKey: "topology.kubernetes.io/region",
-						OriginCosts: v1alpha1.OriginList{
-							v1alpha1.OriginInfo{Origin: "us-west-1", Costs: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
-							v1alpha1.OriginInfo{Origin: "us-east-1", Costs: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
+						OriginList: v1alpha1.OriginList{
+							v1alpha1.OriginInfo{Origin: "us-west-1", CostList: []v1alpha1.CostInfo{{Destination: "us-east-1", NetworkCost: 20}}},
+							v1alpha1.OriginInfo{Origin: "us-east-1", CostList: []v1alpha1.CostInfo{{Destination: "us-west-1", NetworkCost: 20}}},
 						}},
 					v1alpha1.TopologyInfo{
 						TopologyKey: "topology.kubernetes.io/zone",
-						OriginCosts: v1alpha1.OriginList{
-							v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
-							v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
-							v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
-							v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
+						OriginList: v1alpha1.OriginList{
+							v1alpha1.OriginInfo{Origin: "Z1", CostList: []v1alpha1.CostInfo{{Destination: "Z2", NetworkCost: 5}}},
+							v1alpha1.OriginInfo{Origin: "Z2", CostList: []v1alpha1.CostInfo{{Destination: "Z1", NetworkCost: 5}}},
+							v1alpha1.OriginInfo{Origin: "Z3", CostList: []v1alpha1.CostInfo{{Destination: "Z4", NetworkCost: 10}}},
+							v1alpha1.OriginInfo{Origin: "Z4", CostList: []v1alpha1.CostInfo{{Destination: "Z3", NetworkCost: 10}}},
 						}},
 				}},
 			},
@@ -880,103 +854,103 @@ func TestNetworkOverheadFilter(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            	string
-		agName          	string
-		appGroup        	*v1alpha1.AppGroup
-		networkTopology 	*v1alpha1.NetworkTopology
-		pod             	*v1.Pod
-		pods				[]*v1.Pod
-		nodes           	[]*v1.Node
-		nodeToFilter    	*v1.Node
-		wantStatus     	 	*framework.Status
+		name            string
+		agName          string
+		appGroup        *v1alpha1.AppGroup
+		networkTopology *v1alpha1.NetworkTopology
+		pod             *v1.Pod
+		pods            []*v1.Pod
+		nodes           []*v1.Node
+		nodeToFilter    *v1.Node
+		wantStatus      *framework.Status
 	}{
 		{
-			name:            	"AppGroup: basic, P1 to allocate, n-1 to filter: n-1 does not meet network requirements",
-			agName:          	"basic",
-			appGroup:        	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P1", 0, "basic", nil, nil),
-			nodes:           	nodes,
-			wantStatus:      	framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Workload dependencies: OK: 0 NotOK: 1")),
-			nodeToFilter:    	nodes[0],
-			pods:			 	pods,
+			name:            "AppGroup: basic, P1 to allocate, n-1 to filter: n-1 does not meet network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P1", "P1-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Workload dependencies: OK: 0 NotOK: 1")),
+			nodeToFilter:    nodes[0],
+			pods:            pods,
 		},
 		{
-			name:            	"AppGroup: basic, P1 to allocate, n-6 to filter: n-6 meets network requirements",
-			agName:          	"basic",
-			appGroup:        	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P1", 0, "basic", nil, nil),
-			nodes:          	nodes,
-			wantStatus:      	nil,
-			nodeToFilter:    	nodes[5],
-			pods:			 	pods,
+			name:            "AppGroup: basic, P1 to allocate, n-6 to filter: n-6 meets network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P1", "P1-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      nil,
+			nodeToFilter:    nodes[5],
+			pods:            pods,
 		},
 		{
-			name:            	"AppGroup: basic, P2 to allocate, n-5 to filter: n-5 does not meet network requirements",
-			agName:          	"basic",
-			appGroup:        	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P2", 0, "basic", nil, nil),
-			nodes:           	nodes,
-			wantStatus:      	framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-5 does not meet several network requirements from Workload dependencies: OK: 0 NotOK: 1")),
-			nodeToFilter:    	nodes[4],
-			pods:			 	pods,
+			name:            "AppGroup: basic, P2 to allocate, n-5 to filter: n-5 does not meet network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P2", "P2-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-5 does not meet several network requirements from Workload dependencies: OK: 0 NotOK: 1")),
+			nodeToFilter:    nodes[4],
+			pods:            pods,
 		},
 		{
-			name:            	"AppGroup: basic, P2 to allocate, n-7 to filter: n-7 meets network requirements",
-			agName:          	"basic",
-			appGroup:        	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P2", 0, "basic", nil, nil),
-			nodes:           	nodes,
-			wantStatus:      	nil,
-			nodeToFilter:    	nodes[6],
-			pods:			 	pods,
+			name:            "AppGroup: basic, P2 to allocate, n-7 to filter: n-7 meets network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P2", "P2-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      nil,
+			nodeToFilter:    nodes[6],
+			pods:            pods,
 		},
 		{
-			name:            	"AppGroup: basic, P3 to allocate, no dependencies, n-1 to filter: n-1 meets network requirements",
-			agName:          	"basic",
-			appGroup:        	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P3", 0, "basic", nil, nil),
-			nodes:           	nodes,
-			wantStatus:      	nil,
-			nodeToFilter:    	nodes[0],
-			pods:			 	pods,
+			name:            "AppGroup: basic, P3 to allocate, no dependencies, n-1 to filter: n-1 meets network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P3", "P3-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      nil,
+			nodeToFilter:    nodes[0],
+			pods:            pods,
 		},
 		{
-			name:            	"AppGroup: basic, P10 to allocate (Different AppGroup!), n-1 to filter: n-1 meets network requirements",
-			agName:          	"basic",
-			appGroup:        	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P10", 0, "", nil, nil),
-			nodes:           	nodes,
-			wantStatus:      	nil,
-			nodeToFilter:    	nodes[0],
-			pods:				pods,
+			name:            "AppGroup: basic, P10 to allocate (Different AppGroup!), n-1 to filter: n-1 meets network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P10", "P10-deployment", 0, "", nil, nil),
+			nodes:           nodes,
+			wantStatus:      nil,
+			nodeToFilter:    nodes[0],
+			pods:            pods,
 		},
 		{
-			name:   		 	"AppGroup: basic, P1 to allocate, n-1 to filter, multiple dependencies: n-1 does not meet network requirements",
-			agName: 		 	"basic",
-			appGroup: 		 	basicAppGroup,
-			networkTopology: 	networkTopology,
-			pod:             	makePod("P1", 0, "basic", nil, nil),
-			nodes:           	nodes,
-			wantStatus:      	framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Workload dependencies: OK: 0 NotOK: 1")),
-			nodeToFilter:    	nodes[0],
-			pods:			 	pods,
+			name:            "AppGroup: basic, P1 to allocate, n-1 to filter, multiple dependencies: n-1 does not meet network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P1", "P1-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Workload dependencies: OK: 0 NotOK: 1")),
+			nodeToFilter:    nodes[0],
+			pods:            pods,
 		},
 		{
-			name:   		 	"AppGroup: basic, P1 to allocate, n-6 to filter, multiple dependencies: n-6 meets network requirements",
-			agName: 		 	"basic",
-			appGroup: 		 	basicAppGroup,
-			networkTopology:	networkTopology,
-			pod:            	makePod("P1", 0, "basic", nil, nil),
-			nodes:          	nodes,
-			wantStatus:     	nil,
-			nodeToFilter:   	nodes[5],
-			pods:				pods,
+			name:            "AppGroup: basic, P1 to allocate, n-6 to filter, multiple dependencies: n-6 meets network requirements",
+			agName:          "basic",
+			appGroup:        basicAppGroup,
+			networkTopology: networkTopology,
+			pod:             makePod("P1", "P1-deployment", 0, "basic", nil, nil),
+			nodes:           nodes,
+			wantStatus:      nil,
+			nodeToFilter:    nodes[5],
+			pods:            pods,
 		},
 	}
 	for _, tt := range tests {
@@ -1005,7 +979,7 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			podLister := podInformer.Lister()
 			informerFactory.Start(ctx.Done())
 
-			for _, p := range tt.pods{
+			for _, p := range tt.pods {
 				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
 				if err != nil {
 					t.Fatalf("Failed to create Pod %q: %v", p.Name, err)
@@ -1022,13 +996,13 @@ func TestNetworkOverheadFilter(t *testing.T) {
 				runtime.WithInformerFactory(informerFactory), runtime.WithSnapshotSharedLister(snapshot))
 
 			pl := &NetworkOverhead{
-				handle:     fh,
-				agLister:   &agLister,
-				podLister:  podLister,
-				ntLister:   &ntLister,
-				namespaces: []string{"default"},
-				weightsName:  "UserDefined",
-				ntName:     "nt-test",
+				handle:      fh,
+				agLister:    &agLister,
+				podLister:   podLister,
+				ntLister:    &ntLister,
+				namespaces:  []string{"default"},
+				weightsName: "UserDefined",
+				ntName:      "nt-test",
 			}
 
 			// Without sleep sometimes the pods are not created in the api in time
@@ -1059,96 +1033,95 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 		Spec: v1alpha1.AppGroupSpec{NumMembers: 11, TopologySortingAlgorithm: "KahnSort",
 			Workloads: v1alpha1.AppGroupWorkloadList{
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1",APIVersion: "apps/v1", Namespace: "default"}, // frontend
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, // frontend
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace:  "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10",APIVersion: "apps/v1", Namespace:  "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8-deployment", Selector: "P8", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}},
 					},
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, // cartService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}, // cartService
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}},
 					},
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, // productCatalogService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}, // productCatalogService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, // currencyService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}, // currencyService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, // paymentService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5-deployment", Selector: "P5", APIVersion: "apps/v1", Namespace: "default"}, // paymentService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, // shippingService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}, // shippingService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, // emailService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7-deployment", Selector: "P7", APIVersion: "apps/v1", Namespace: "default"}, // emailService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, // checkoutService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8-deployment", Selector: "P8", APIVersion: "apps/v1", Namespace: "default"}, // checkoutService
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}},
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5-deployment", Selector: "P5", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7-deployment", Selector: "P7", APIVersion: "apps/v1", Namespace: "default"}},
 					},
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, // recommendationService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}, // recommendationService
 					Dependencies: v1alpha1.DependenciesList{
-						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}},
+						v1alpha1.DependenciesInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}},
 					}},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default",}, // adService
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}, // adService
 				},
 				v1alpha1.AppGroupWorkload{
-					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default",}, // redis-cart
+					Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}, // redis-cart
 				},
 			},
 		},
 		Status: v1alpha1.AppGroupStatus{
 			ScheduleStartTime:       metav1.Time{time.Now()},
 			TopologyCalculationTime: metav1.Time{time.Now()},
-			TopologyOrder: v1alpha1.TopologyList{
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8", APIVersion: "apps/v1", Namespace: "default"}, Index: 4},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6", APIVersion: "apps/v1", Namespace: "default"}, Index: 6},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5", APIVersion: "apps/v1", Namespace: "default"}, Index: 7},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4", APIVersion: "apps/v1", Namespace: "default"}, Index: 8},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 9},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 10},
-				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
+			TopologyOrder: v1alpha1.AppGroupTopologyList{
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P8-deployment", Selector: "P8", APIVersion: "apps/v1", Namespace: "default"}, Index: 4},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P7-deployment", Selector: "P7", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P6-deployment", Selector: "P6", APIVersion: "apps/v1", Namespace: "default"}, Index: 6},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P5-deployment", Selector: "P5", APIVersion: "apps/v1", Namespace: "default"}, Index: 7},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P4-deployment", Selector: "P4", APIVersion: "apps/v1", Namespace: "default"}, Index: 8},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace: "default"}, Index: 9},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P2-deployment", Selector: "P2", APIVersion: "apps/v1", Namespace: "default"}, Index: 10},
+				v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
 			},
 		},
 	}
 
-	podNames := []string{"P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"}
 	regionNames := []string{"R1", "R2", "R3", "R4", "R5"}
 	zoneNames := []string{"Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7", "Z8", "Z9", "Z10"}
 
-	pods:= []*v1.Pod{
-		makePodAllocated("P1", "n-2", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P2", "n-5", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P3", "n-1", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P4", "n-9", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P5", "n-5", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P6", "n-1", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P7", "n-2", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P8", "n-5", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P9", "n-1", 0, "OnlineBoutique", nil, nil),
-		makePodAllocated("P10", "n-2", 0, "OnlineBoutique", nil, nil),
+	pods := []*v1.Pod{
+		makePodAllocated("P1", "P1-deployment", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P2", "P2-deployment", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P3", "P3-deployment", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P4", "P4-deployment", "n-9", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P5", "P5-deployment", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P6", "P6-deployment", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P7", "P7-deployment", "n-2", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P8", "P8-deployment", "n-5", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P9", "P9-deployment", "n-1", 0, "OnlineBoutique", nil, nil),
+		makePodAllocated("P10", "P10-deployment", "n-2", 0, "OnlineBoutique", nil, nil),
 	}
 
 	// Create Network Topology CRD
@@ -1157,35 +1130,35 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 		Spec: v1alpha1.NetworkTopologySpec{
 			Weights: v1alpha1.WeightList{
 				v1alpha1.WeightInfo{Name: "UserDefined",
-					CostList: v1alpha1.CostList{
+					TopologyList: v1alpha1.TopologyList{
 						v1alpha1.TopologyInfo{
 							TopologyKey: "topology.kubernetes.io/region",
-							OriginCosts: v1alpha1.OriginList{
-								v1alpha1.OriginInfo{Origin: "R1", Costs: []v1alpha1.CostInfo{
+							OriginList: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "R1", CostList: []v1alpha1.CostInfo{
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
 									{Destination: "R4", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R2", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R2", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
 									{Destination: "R4", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R3", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R3", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R4", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R4", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R4", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
 									{Destination: "R5", NetworkCost: 50}},
 								},
-								v1alpha1.OriginInfo{Origin: "R5", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "R5", CostList: []v1alpha1.CostInfo{
 									{Destination: "R1", NetworkCost: 50},
 									{Destination: "R2", NetworkCost: 50},
 									{Destination: "R3", NetworkCost: 50},
@@ -1194,53 +1167,53 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 							}},
 						v1alpha1.TopologyInfo{
 							TopologyKey: "topology.kubernetes.io/region",
-							OriginCosts: v1alpha1.OriginList{
-								v1alpha1.OriginInfo{Origin: "Z1", Costs: []v1alpha1.CostInfo{
+							OriginList: v1alpha1.OriginList{
+								v1alpha1.OriginInfo{Origin: "Z1", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z2", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z2", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z3", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z3", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z4", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z4", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z4", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z5", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z5", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z6", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z6", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z7", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z7", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z7", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z8", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z8", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z9", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z9", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z10", NetworkCost: 10}},
 								},
-								v1alpha1.OriginInfo{Origin: "Z10", Costs: []v1alpha1.CostInfo{
+								v1alpha1.OriginInfo{Origin: "Z10", CostList: []v1alpha1.CostInfo{
 									{Destination: "Z1", NetworkCost: 10}, {Destination: "Z2", NetworkCost: 10}, {Destination: "Z3", NetworkCost: 10},
 									{Destination: "Z4", NetworkCost: 10}, {Destination: "Z5", NetworkCost: 10}, {Destination: "Z6", NetworkCost: 10},
 									{Destination: "Z7", NetworkCost: 10}, {Destination: "Z8", NetworkCost: 10}, {Destination: "Z9", NetworkCost: 10}},
@@ -1271,12 +1244,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        10,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1284,12 +1256,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        100,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1297,12 +1268,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        500,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1310,12 +1280,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        1000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1323,12 +1292,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        2000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1336,12 +1304,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        3000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1349,12 +1316,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        5000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 		{
@@ -1362,12 +1328,11 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			nodesNum:        10000,
 			dependenciesNum: 10,
 			agName:          "OnlineBoutique",
-			podNames:        podNames,
 			regionNames:     regionNames,
 			zoneNames:       zoneNames,
 			appGroup:        onlineBoutiqueAppGroup,
 			networkTopology: networkTopology,
-			pod:             makePod("P1", 0, "OnlineBoutique", nil, nil),
+			pod:             makePod("P1", "P1-deployment", 0, "OnlineBoutique", nil, nil),
 			pods:            pods,
 		},
 	}
@@ -1406,7 +1371,7 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 
 			informerFactory.Start(ctx.Done())
 
-			for _, p := range tt.pods{
+			for _, p := range tt.pods {
 				_, err := cs.CoreV1().Pods("default").Create(ctx, p, metav1.CreateOptions{})
 				if err != nil {
 					b.Fatalf("Failed to create Workload %q: %v", p.Name, err)
@@ -1423,13 +1388,13 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 				runtime.WithInformerFactory(informerFactory), runtime.WithSnapshotSharedLister(snapshot))
 
 			pl := &NetworkOverhead{
-				handle:     fh,
-				agLister:   &agLister,
-				podLister:  podLister,
-				ntLister:   &ntLister,
-				namespaces: []string{"default"},
-				weightsName:  "UserDefined",
-				ntName:     "nt-test",
+				handle:      fh,
+				agLister:    &agLister,
+				podLister:   podLister,
+				ntLister:    &ntLister,
+				namespaces:  []string{"default"},
+				weightsName: "UserDefined",
+				ntName:      "nt-test",
 			}
 
 			// Without sleep sometimes the pods are not created in the api in time
@@ -1522,21 +1487,21 @@ func randomInt(min int, max int) int {
 	return min + rand.Intn(max-min)
 }
 
-func makePod(name string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
+func makePod(selector string, podName string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
 	label := make(map[string]string)
-	label[util.AppGroupLabel] = appGroup
-	label[util.DeploymentLabel] = name
+	label[v1alpha1.AppGroupLabel] = appGroup
+	label[v1alpha1.AppGroupSelectorLabel] = selector
 
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
+			Name:   podName,
 			Labels: label,
 		},
 		Spec: v1.PodSpec{
 			Priority: &priority,
 			Containers: []v1.Container{
 				{
-					Name: name,
+					Name: podName,
 					Resources: v1.ResourceRequirements{
 						Requests: requests,
 						Limits:   limits,
@@ -1547,14 +1512,14 @@ func makePod(name string, priority int32, appGroup string, requests, limits v1.R
 	}
 }
 
-func makePodAllocated(name string, hostname string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
+func makePodAllocated(selector string, podName string, hostname string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
 	label := make(map[string]string)
-	label[util.AppGroupLabel] = appGroup
-	label[util.DeploymentLabel] = name
+	label[v1alpha1.AppGroupLabel] = appGroup
+	label[v1alpha1.AppGroupSelectorLabel] = selector
 
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
+			Name:   podName,
 			Labels: label,
 		},
 		Spec: v1.PodSpec{
@@ -1562,7 +1527,7 @@ func makePodAllocated(name string, hostname string, priority int32, appGroup str
 			Priority: &priority,
 			Containers: []v1.Container{
 				{
-					Name: name,
+					Name: podName,
 					Resources: v1.ResourceRequirements{
 						Requests: requests,
 						Limits:   limits,

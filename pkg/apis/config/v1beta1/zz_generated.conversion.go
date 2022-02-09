@@ -162,7 +162,6 @@ func autoConvert_config_CoschedulingArgs_To_v1beta1_CoschedulingArgs(in *config.
 func Convert_config_CoschedulingArgs_To_v1beta1_CoschedulingArgs(in *config.CoschedulingArgs, out *CoschedulingArgs, s conversion.Scope) error {
 	return autoConvert_config_CoschedulingArgs_To_v1beta1_CoschedulingArgs(in, out, s)
 }
-
 func autoConvert_v1beta1_LoadVariationRiskBalancingArgs_To_config_LoadVariationRiskBalancingArgs(in *LoadVariationRiskBalancingArgs, out *config.LoadVariationRiskBalancingArgs, s conversion.Scope) error {
 	if err := Convert_v1beta1_MetricProviderSpec_To_config_MetricProviderSpec(&in.MetricProvider, &out.MetricProvider, s); err != nil {
 		return err

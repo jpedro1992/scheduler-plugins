@@ -19,11 +19,11 @@ limitations under the License.
 package v1beta1
 
 import (
-	"strconv"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schedulerconfig "k8s.io/kube-scheduler/config/v1"
+	"strconv"
 
 	pluginConfig "sigs.k8s.io/scheduler-plugins/pkg/apis/config"
 )
@@ -73,7 +73,7 @@ var (
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
 
-	defaultWeightsName = "UserDefined"
+	defaultWeightsName         = "UserDefined"
 	defaultNetworkTopologyName = "nt-default"
 )
 

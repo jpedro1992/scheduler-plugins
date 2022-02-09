@@ -74,9 +74,9 @@ var (
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
 
-	defaultKubeConfigPath string = "/etc/kubernetes/scheduler.conf"
-	defaultWeightsName string = "UserDefined"
-	defaultNetworkTopologyName string = "nt-default"
+	defaultKubeConfigPath      = "/etc/kubernetes/scheduler.conf"
+	defaultWeightsName         = "UserDefined"
+	defaultNetworkTopologyName = "nt-default"
 )
 
 // SetDefaultsCoschedulingArgs sets the default parameters for Coscheduling plugin.

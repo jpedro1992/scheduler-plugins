@@ -5,7 +5,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: "To be Defined" # edited manually
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/scheduler-plugins/pull/52 # edited manually #api-approved.kubernetes.io: "To be Defined" # edited manually
     controller-gen.kubebuilder.io/version: v0.6.2
   creationTimestamp: null
   name: appgroups.scheduling.sigs.k8s.io
@@ -55,53 +55,53 @@ spec:
                     description: AppGroupWorkload contains information about one Workload.
                     properties:
                       workload:
-                        items:
-                          description: Workload Reference (name, apiVersion, Kind)
-                          properties:
-                            kind:
-                              description: Kind is a string value representing the REST resource.
-                              type: string
-                            apiVersion:
-                              description: APIVersion defines the versioned schema of an object.
-                              type: string
-                            namespace:
-                              description: Represents the namespace of the Object
-                              type: string
-                            name:
-                              description: Represents the name of the Object
-                              type: string
-                          required:
-                            - kind
-                            - apiVersion
-                            - namespace
-                            - name
-                          type: object
+                        properties:
+                          kind:
+                            description: Kind is a string value representing the REST resource.
+                            type: string
+                          name:
+                            description: Represents the name of the Object
+                            type: string
+                          selector:
+                            description: Defines how to find pods related to the workload
+                            type: string
+                          apiVersion:
+                            description: APIVersion defines the versioned schema of an object.
+                            type: string
+                          namespace:
+                            description: Represents the namespace of the Object
+                            type: string
+                        required:
+                          - kind
+                          - name
+                          - selector
+                        type: object
                       dependencies:
                         items:
                           description: DependenciesList establishes dependencies between workloads.
                           properties:
                             workload:
-                              items:
-                                description: Workload Reference (name, apiVersion, Kind)
-                                properties:
-                                  kind:
-                                    description: Kind is a string value representing the REST resource.
-                                    type: string
-                                  apiVersion:
-                                    description: APIVersion defines the versioned schema of an object.
-                                    type: string
-                                  namespace:
-                                    description: Represents the namespace of the Object
-                                    type: string
-                                  name:
-                                    description: Represents the name of the Object
-                                    type: string
-                                required:
-                                  - kind
-                                  - apiVersion
-                                  - namespace
-                                  - name
-                                type: object
+                              properties:
+                                kind:
+                                  description: Kind is a string value representing the REST resource.
+                                  type: string
+                                name:
+                                  description: Represents the name of the Object
+                                  type: string
+                                selector:
+                                  description: Defines how to find pods related to the workload
+                                  type: string
+                                apiVersion:
+                                  description: APIVersion defines the versioned schema of an object.
+                                  type: string
+                                namespace:
+                                  description: Represents the namespace of the Object
+                                  type: string
+                              required:
+                                - kind
+                                - name
+                                - selector
+                              type: object
                             minBandwidth:
                               anyOf:
                                 - type: integer
@@ -151,27 +151,27 @@ spec:
                     description: Workload reference and Priority index
                     properties:
                       workload:
-                        items:
-                          description: Workload Reference (Kind, apiVersion, namespace, name)
-                          properties:
-                            kind:
-                              description: Kind is a string value representing the REST resource.
-                              type: string
-                            apiVersion:
-                              description: APIVersion defines the versioned schema of an object.
-                              type: string
-                            namespace:
-                              description: Represents the namespace of the Object
-                              type: string
-                            name:
-                              description: Represents the name of the Object
-                              type: string
-                            required:
-                              - kind
-                              - apiVersion
-                              - namespace
-                              - name
-                            type: object
+                        properties:
+                          kind:
+                            description: Kind is a string value representing the REST resource.
+                            type: string
+                          name:
+                            description: Represents the name of the Object
+                            type: string
+                          selector:
+                            description: Defines how to find pods related to the workload
+                            type: string
+                          apiVersion:
+                            description: APIVersion defines the versioned schema of an object.
+                            type: string
+                          namespace:
+                            description: Represents the namespace of the Object
+                            type: string
+                        required:
+                          - kind
+                          - name
+                          - selector
+                        type: object
                       index:
                         type: integer
                         default: 1

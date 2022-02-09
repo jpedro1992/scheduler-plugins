@@ -18,77 +18,74 @@ package util
 
 import (
 	"fmt"
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
-	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	"sort"
 	"strings"
 )
 
-const (
-// AppGroupLabel is the default label of app group for network aware plugin
-AppGroupLabel = "app-group.scheduling.sigs.k8s.io"
-DeploymentLabel = "app"
+// Sort AppGroupTopologyList by Workload.Selector
+type ByWorkloadSelector v1alpha1.AppGroupTopologyList
 
-// Topological Sorting algorithms supported by AppGroup
-AppGroupKahnSort      = "KahnSort"
-AppGroupTarjanSort    = "TarjanSort"
-AppGroupReverseKahn   = "ReverseKahn"
-AppGroupReverseTarjan = "ReverseTarjan"
-AppGroupAlternateKahn   = "AlternateKahn"
-AppGroupAlternateTarjan = "AlternateTarjan"
-
-)
-
-type NodeAddressType string
-
-// Sort AppGroupTopology by Workload Name
-type ByWorkloadName []schedulingv1.AppGroupTopologyInfo
-
-func (s ByWorkloadName) Len() int {
+func (s ByWorkloadSelector) Len() int {
 	return len(s)
 }
 
-func (s ByWorkloadName) Swap(i, j int) {
+func (s ByWorkloadSelector) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s ByWorkloadName) Less(i, j int) bool {
-	return s[i].Workload.Name < s[j].Workload.Name
+func (s ByWorkloadSelector) Less(i, j int) bool {
+	return s[i].Workload.Selector < s[j].Workload.Selector
 }
 
-// GetPodAppGroupLabel get app group from pod annotations
-func GetPodAppGroupLabel(pod *v1.Pod) string {
-	return pod.Labels[AppGroupLabel]
+// Sort AppGroupWorkloadList by Workload.Selector
+type BySelector v1alpha1.AppGroupWorkloadList
+
+func (s BySelector) Len() int {
+	return len(s)
 }
 
-// GetServiceAppGroupLabel get app group from pod annotations
-func GetServiceAppGroupLabel(service *v1.Service) string {
-	return service.Labels[AppGroupLabel]
+func (s BySelector) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
-// GetDeploymentAppGroupLabel get app group from pod annotations
-func GetDeploymentAppGroupLabel(deployment *appsv1beta2.Deployment) string {
-	return deployment.Labels[AppGroupLabel]
+func (s BySelector) Less(i, j int) bool {
+	return s[i].Workload.Selector < s[j].Workload.Selector
 }
 
-// GetAppGroupFullName get namespaced group name from pod annotations
-func GetPodAppGroupFullName(pod *v1.Pod) string {
-	agName := GetPodAppGroupLabel(pod)
-	if len(agName) == 0 {
-		return ""
+// FindWorkloadByName : return the workload's Info based on its name
+func FindWorkloadByName(workloadList v1alpha1.AppGroupWorkloadList, name string) v1alpha1.AppGroupWorkloadInfo {
+	low := 0
+	high := len(workloadList) - 1
+
+	for low <= high {
+		mid := (low + high) / 2
+		if workloadList[mid].Workload.Name == name {
+			return workloadList[mid].Workload // Return the WorkloadInfo
+		} else if workloadList[mid].Workload.Name < name {
+			low = mid + 1
+		} else if workloadList[mid].Workload.Name > name {
+			high = mid - 1
+		}
 	}
-	return fmt.Sprintf("%v/%v", pod.Namespace, agName)
+	// Workload Info was not found
+	return v1alpha1.AppGroupWorkloadInfo{}
 }
 
-// GetDeploymentName get workloadName from pod annotations
-func GetDeploymentName(pod *v1.Pod) string {
-	return pod.Labels[DeploymentLabel]
+// GetPodAppGroupLabel : get AppGroup from pod annotations
+func GetPodAppGroupLabel(pod *v1.Pod) string {
+	return pod.Labels[v1alpha1.AppGroupLabel]
+}
+
+// GetPodAppGroupSelector : get Workload Selector from pod annotations
+func GetPodAppGroupSelector(pod *v1.Pod) string {
+	return pod.Labels[v1alpha1.AppGroupSelectorLabel]
 }
 
 // Implementation of Topology Sorting algorithms based on https://github.com/otaviokr/topological-sort
-// KahnSort receives a tree (AppGroup Service Topology) and returns an array with the pods sorted.
+// KahnSort : receives a tree (AppGroup Service Topology) and returns an array with the pods sorted.
 func KahnSort(tree map[string][]string) ([]string, error) {
 	var sorted []string
 	inDegree := map[string]int{}
@@ -160,7 +157,7 @@ func KahnSort(tree map[string][]string) ([]string, error) {
 	return sorted, nil
 }
 
-// TarjanSort receives a description of a search tree and returns an array with the elements sorted.
+// TarjanSort : receives a description of a search tree and returns a sorted array based on the Tarjan Sort algorithm.
 func TarjanSort(tree map[string][]string) ([]string, error) {
 
 	// Normalize the tree to ensure all nodes are referred in the map.
@@ -218,17 +215,17 @@ func TarjanSort(tree map[string][]string) ([]string, error) {
 	return sorted, nil
 }
 
-// Reverse inverts the order given by Kahn and Tarjan.
+// Reverse : inverts the order given by a Topology Sorting algorithm (e.g., Kahn, Tarjan).
 func Reverse(tree map[string][]string, algorithm string) ([]string, error) {
 	var reversed []string
 	var sorted []string
 	var err error
 
 	switch algorithm {
-	case "Kahn":
+	case v1alpha1.AppGroupKahnSort:
 		sorted, err = KahnSort(tree)
 		break
-	case "Tarjan":
+	case v1alpha1.AppGroupTarjanSort:
 		sorted, err = TarjanSort(tree)
 		break
 	}
@@ -244,17 +241,18 @@ func Reverse(tree map[string][]string, algorithm string) ([]string, error) {
 	return reversed, nil
 }
 
-// Alternate inverts the order given by Kahn and Tarjan. [1, N-1, 2, N-2, ...]
+// Alternate : inverts the order given by a Topology Sorting algorithm (e.g., Kahn, Tarjan).
+// Example: [1, N-1, 2, N-2, ...] (element indices)
 func Alternate(tree map[string][]string, algorithm string) ([]string, error) {
 	var alternate []string
 	var sorted []string
 	var err error
 
 	switch algorithm {
-	case "Kahn":
+	case v1alpha1.AppGroupKahnSort:
 		sorted, err = KahnSort(tree)
 		break
-	case "Tarjan":
+	case v1alpha1.AppGroupTarjanSort:
 		sorted, err = TarjanSort(tree)
 		break
 	}
@@ -263,7 +261,7 @@ func Alternate(tree map[string][]string, algorithm string) ([]string, error) {
 		return []string{}, err
 	}
 
-	klog.V(5).Info("Sorted: ", sorted)
+	klog.V(6).Info("Sorted: ", sorted)
 
 	for i, j := 0, 0; i < len(sorted); i++ {
 		if i%2 == 0 {
@@ -274,28 +272,28 @@ func Alternate(tree map[string][]string, algorithm string) ([]string, error) {
 		}
 	}
 
-	klog.V(5).Info("Alternate: ", alternate)
+	klog.V(6).Info("Alternate: ", alternate)
 	return alternate, nil
 }
 
-// ReverseKahn inverts the order of the elements in the resulting sorted list.
+// ReverseKahn : reverses the order of the elements given by KahnSort in the resulting sorted list.
 func ReverseKahn(tree map[string][]string) ([]string, error) {
-	return Reverse(tree, "Kahn")
+	return Reverse(tree, v1alpha1.AppGroupKahnSort)
 }
 
-// ReverseTarjan inverts the order of the elements in the resulting sorted list.
+// ReverseTarjan : reverses the order of the elements given by TarjanSort in the resulting sorted list.
 func ReverseTarjan(tree map[string][]string) ([]string, error) {
-	return Reverse(tree, "Tarjan")
+	return Reverse(tree, v1alpha1.AppGroupTarjanSort)
 }
 
-// AlternateKahn inverts the order of the elements in the resulting sorted list.
+// AlternateKahn : inverts the order of the elements given by KahnSort in the resulting sorted list.
 func AlternateKahn(tree map[string][]string) ([]string, error) {
-	return Alternate(tree, "Kahn")
+	return Alternate(tree, v1alpha1.AppGroupKahnSort)
 }
 
-// AlternateTarjan inverts the order of the elements in the resulting sorted list.
+// AlternateTarjan : inverts the order of the elements given by TarjanSort in the resulting sorted list.
 func AlternateTarjan(tree map[string][]string) ([]string, error) {
-	return Alternate(tree, "Tarjan")
+	return Alternate(tree, v1alpha1.AppGroupTarjanSort)
 }
 
 // NormalizeTree: checks if all Pods referred in the slices are present in the map as key too.
@@ -314,6 +312,5 @@ func NormalizeTree(source map[string][]string) map[string][]string {
 			}
 		}
 	}
-
 	return normalized
 }

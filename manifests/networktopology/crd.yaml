@@ -49,24 +49,24 @@ spec:
                       name:
                         type: string
                         description: Algorithm Name (e.g., UserDefined)
-                      costList:
-                        description: Define weights for cross regions in the cluster (CostList)
+                      topologyList:
+                        description: Define weights based on a given topologyKey (TopologyList)
                         items:
                           description: TopologyInfo contains information about one region.
                           properties:
                             topologyKey:
                               type: string
                               description: Topology Key (e.g., "topology.kubernetes.io/region", "topology.kubernetes.io/zone")
-                            originCosts:
-                              description: OriginCosts contains an array of OriginInfo objects (OriginList).
+                            originList:
+                              description: OriginList contains an array of OriginInfo objects (OriginList).
                               items:
                                 description: OriginInfo contains information about one origin.
                                 properties:
                                   origin:
                                     type: string
                                     description: Region Name (Origin)
-                                  costs:
-                                    description: Costs contains an array of CostInfo objects.
+                                  costList:
+                                    description: CostList contains an array of CostInfo objects.
                                     items:
                                       description: CostInfo contains information about one region.
                                       properties:
@@ -100,17 +100,16 @@ spec:
                                     type: array
                                 required:
                                 - origin
-                                - costs
                                 type: object
                               type: array
                           required:
                           - topologyKey
-                          - originCosts
+                          - originList
                           type: object
                         type: array
                     required:
                     - name
-                    - costList
+                    - topologyList
                     type: object
                   type: array
                 configmapName:

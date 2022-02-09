@@ -19,55 +19,48 @@ package util
 import (
 	"context"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	clientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	informers "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions"
 	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/util"
+	"sort"
 )
 
-// key for map concerning network costs (origin / destinations)
+// CostKey : represents a key for a map concerning network costs (origin / destination)
 type CostKey struct {
 	Origin      string
 	Destination string
 }
 
+// Scheduled List : contains several ScheduledInfo
+type ScheduledList []ScheduledInfo
+
+// Scheduled Info : contains information regarding a workload deployment
 type ScheduledInfo struct {
 	// Workload Name
-	WorkloadName string
+	Name string
 
-	// Replica ID
+	// Workload Selector
+	Selector string
+
+	// Workload Replica ID
 	ReplicaID string
 
-	// Hostname
+	// Workload's Hostname
 	Hostname string
 }
 
-type ScheduledList []ScheduledInfo
-
+// GetNodeRegion : retrieve the node's topology region
 func GetNodeRegion(node *v1.Node) string {
 	labels := node.Labels
 	if labels == nil {
 		return ""
 	}
 
-	zone, _ := labels[v1.LabelTopologyRegion]
-	if zone == "" {
-		return ""
-	}
-
-	return zone
-}
-
-func GetNodeZone(node *v1.Node) string {
-	labels := node.Labels
-	if labels == nil {
-		return ""
-	}
-
-	region, _ := labels[v1.LabelTopologyZone]
+	region, _ := labels[v1.LabelTopologyRegion]
 	if region == "" {
 		return ""
 	}
@@ -75,8 +68,23 @@ func GetNodeZone(node *v1.Node) string {
 	return region
 }
 
-// Sort TopologyInfo by TopologyKey
-type ByTopologyKey []schedulingv1.TopologyInfo
+// GetNodeZone : retrieve the node's topology zone
+func GetNodeZone(node *v1.Node) string {
+	labels := node.Labels
+	if labels == nil {
+		return ""
+	}
+
+	zone, _ := labels[v1.LabelTopologyZone]
+	if zone == "" {
+		return ""
+	}
+
+	return zone
+}
+
+// Sort TopologyList by TopologyKey
+type ByTopologyKey v1alpha1.TopologyList
 
 func (s ByTopologyKey) Len() int {
 	return len(s)
@@ -90,8 +98,8 @@ func (s ByTopologyKey) Less(i, j int) bool {
 	return s[i].TopologyKey < s[j].TopologyKey
 }
 
-// Sort OriginInfo by Origin (e.g., Region Name, Zone Name)
-type ByOrigin []schedulingv1.OriginInfo
+// Sort OriginList by Origin
+type ByOrigin v1alpha1.OriginList
 
 func (s ByOrigin) Len() int {
 	return len(s)
@@ -105,8 +113,8 @@ func (s ByOrigin) Less(i, j int) bool {
 	return s[i].Origin < s[j].Origin
 }
 
-// Sort CostInfo by Destination (e.g., Region Name, Zone Name)
-type ByDestination []schedulingv1.CostInfo
+// Sort CostList by Destination
+type ByDestination v1alpha1.CostList
 
 func (s ByDestination) Len() int {
 	return len(s)
@@ -120,67 +128,33 @@ func (s ByDestination) Less(i, j int) bool {
 	return s[i].Destination < s[j].Destination
 }
 
-/*
-func FindPodMinBandwidth(d []schedulingv1.DependenciesInfo, podName string) resource.Quantity{
-	low := 0
-	high := len(d) - 1
-
-	for low <= high {
-		mid := (low + high) / 2
-		if d[mid].PodName == podName {
-			return d[mid].MinBandwidth // Return the Min Bandwidth
-		} else if d[mid].PodName < podName {
-			low = mid + 1
-		} else if d[mid].PodName > podName {
-			high = mid - 1
-		}
-	}
-	return resource.Quantity{}
-}
-
-func FindPodMaxNetworkCost(d []schedulingv1.DependenciesInfo, podName string) int64{
-	low := 0
-	high := len(d) - 1
-
-	for low <= high {
-		mid := (low + high) / 2
-		if d[mid].PodName == podName {
-			return d[mid].MaxNetworkCost // Return the Max Network Cost
-		} else if d[mid].PodName < podName {
-			low = mid + 1
-		} else if d[mid].PodName > podName {
-			high = mid - 1
-		}
-	}
-	return 0
-}
-*/
-
-func FindPodOrder(t schedulingv1.TopologyList, workloadName string) int32 {
+// FindPodOrder : returns the pod's order index based on its AppGroup
+func FindPodOrder(t v1alpha1.AppGroupTopologyList, selector string) int32 {
 	low := 0
 	high := len(t) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
-		if t[mid].Workload.Name == workloadName {
+		if t[mid].Workload.Selector == selector {
 			return t[mid].Index // Return the index
-		} else if t[mid].Workload.Name < workloadName {
+		} else if t[mid].Workload.Selector < selector {
 			low = mid + 1
-		} else if t[mid].Workload.Name > workloadName {
+		} else if t[mid].Workload.Selector > selector {
 			high = mid - 1
 		}
 	}
 	return -1
 }
 
-func FindOriginCosts(originList []schedulingv1.OriginInfo, origin string) []schedulingv1.CostInfo {
+// FindOriginCosts : returns the CostList related to a certain Origin
+func FindOriginCosts(originList v1alpha1.OriginList, origin string) v1alpha1.CostList {
 	low := 0
 	high := len(originList) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
 		if originList[mid].Origin == origin {
-			return originList[mid].Costs // Return the Costs
+			return originList[mid].CostList // Return the CostList
 		} else if originList[mid].Origin < origin {
 			low = mid + 1
 		} else if originList[mid].Origin > origin {
@@ -188,18 +162,18 @@ func FindOriginCosts(originList []schedulingv1.OriginInfo, origin string) []sche
 		}
 	}
 	// Costs were not found
-	return []schedulingv1.CostInfo{}
+	return v1alpha1.CostList{}
 }
 
-
-func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) schedulingv1.OriginList {
+// FindTopologyKey : returns the OriginList related to a certain TopologyList
+func FindTopologyKey(topologyList v1alpha1.TopologyList, key v1alpha1.TopologyKey) v1alpha1.OriginList {
 	low := 0
 	high := len(topologyList) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
 		if topologyList[mid].TopologyKey == key {
-			return topologyList[mid].OriginCosts // Return the Costs
+			return topologyList[mid].OriginList // Return the OriginList
 		} else if topologyList[mid].TopologyKey < key {
 			low = mid + 1
 		} else if topologyList[mid].TopologyKey > key {
@@ -207,63 +181,15 @@ func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) sched
 		}
 	}
 	// Topology Key was not found
-	return schedulingv1.OriginList{}
+	return v1alpha1.OriginList{}
 }
 
-// May I need to sort the previous vector?
-func FindOriginBandwidthCapacity(costList []schedulingv1.CostInfo, destination string) resource.Quantity {
-	low := 0
-	high := len(costList) - 1
-
-	for low <= high {
-		mid := (low + high) / 2
-		if costList[mid].Destination == destination {
-			return costList[mid].BandwidthCapacity // Return the Bandwidth Capacity
-		} else if costList[mid].Destination < destination {
-			low = mid + 1
-		} else if costList[mid].Destination > destination {
-			high = mid - 1
-		}
-	}
-	// Bandwidth Capacity not found
-	return resource.MustParse("0")
-}
-
-// assignedPod selects pods that are assigned (scheduled and running).
+// assignedPod : selects pods that are assigned (scheduled and running).
 func AssignedPod(pod *v1.Pod) bool {
 	return len(pod.Spec.NodeName) != 0
 }
 
-/*
-func FindLowerBoundWeightList(weightList []schedulingv1.OriginInfo, nodeName string, low int, high int) int {
-	if low > high {
-		return low
-	}
-
-	var mid = low + (high-low)>>1
-
-	if weightList[mid].Origin >= nodeName {
-		return FindLowerBoundWeightList(weightList, nodeName, low, mid-1)
-	} else {
-		return FindLowerBoundWeightList(weightList, nodeName, mid+1, high)
-	}
-}
-
-func FindUpperBoundWeightList(weightList []schedulingv1.OriginInfo, nodeName string, low int, high int) int {
-	if low > high {
-		return low
-	}
-
-	var mid = low + (high-low)>>1
-
-	if weightList[mid].Origin > nodeName {
-		return FindUpperBoundWeightList(weightList, nodeName, low, mid-1)
-	} else {
-		return FindUpperBoundWeightList(weightList, nodeName, mid+1, high)
-	}
-}
-*/
-
+// InitAppGroupInformer : initializes a AppGroup Informer
 func InitAppGroupInformer(masterOverride, kubeConfigPath *string) (*schedlister.AppGroupLister, error) {
 	kubeConfig, err := clientcmd.BuildConfigFromFlags(*masterOverride, *kubeConfigPath)
 	if err != nil {
@@ -289,6 +215,7 @@ func InitAppGroupInformer(masterOverride, kubeConfigPath *string) (*schedlister.
 	return &appGroupLister, nil
 }
 
+// InitNetworkTopologyInformer : initializes a NetworkTopology Informer
 func InitNetworkTopologyInformer(masterOverride, kubeConfigPath *string) (*schedlister.NetworkTopologyLister, error) {
 	kubeConfig, err := clientcmd.BuildConfigFromFlags(*masterOverride, *kubeConfigPath)
 	if err != nil {
@@ -312,4 +239,56 @@ func InitNetworkTopologyInformer(masterOverride, kubeConfigPath *string) (*sched
 	ntInformerFactory.WaitForCacheSync(ctx.Done())
 
 	return &appGroupLister, nil
+}
+
+// getScheduledList : get Pods already scheduled in the cluster for that specific AppGroup
+func GetScheduledList(pods []*v1.Pod) ScheduledList {
+	// scheduledList: Deployment name, replicaID, hostname
+	scheduledList := ScheduledList{}
+
+	for _, p := range pods {
+		if AssignedPod(p) {
+			scheduledInfo := ScheduledInfo{
+				Name:      p.Name,
+				Selector:  util.GetPodAppGroupSelector(p),
+				ReplicaID: string(p.GetUID()),
+				Hostname:  p.Spec.NodeName,
+			}
+			scheduledList = append(scheduledList, scheduledInfo)
+		}
+	}
+	return scheduledList
+}
+
+// GetDependencyList gets workload dependencies established in the AppGroup CR
+func GetDependencyList(pod *v1.Pod, ag *v1alpha1.AppGroup) []v1alpha1.DependenciesInfo {
+
+	// Check Dependencies of the given pod
+	var dependencyList []v1alpha1.DependenciesInfo
+
+	// Get Labels of the given pod
+	podLabels := pod.GetLabels()
+
+	for _, w := range ag.Spec.Workloads {
+		if w.Workload.Selector == podLabels[v1alpha1.AppGroupSelectorLabel] {
+			for _, dependency := range w.Dependencies {
+				dependencyList = append(dependencyList, dependency)
+			}
+		}
+	}
+	klog.V(6).Info("dependencyList: ", dependencyList)
+
+	// Return the dependencyList
+	return dependencyList
+}
+
+// SortNetworkTopologyCosts : sort costs if manual weights were selected
+func SortNetworkTopologyCosts(weightsName string, networkTopology *v1alpha1.NetworkTopology) {
+	if weightsName != v1alpha1.NetworkTopologyNetperfCosts { // Manual weights were selected
+		for _, w := range networkTopology.Spec.Weights {
+			// Sort Costs by TopologyKey, might not be sorted since were manually defined
+			sort.Sort(ByTopologyKey(w.TopologyList))
+		}
+	}
+	return
 }

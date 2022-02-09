@@ -313,7 +313,6 @@ func Convert_config_NodeResourceTopologyMatchArgs_To_v1beta2_NodeResourceTopolog
 	return autoConvert_config_NodeResourceTopologyMatchArgs_To_v1beta2_NodeResourceTopologyMatchArgs(in, out, s)
 }
 
-
 func autoConvert_v1beta2_NodeResourcesAllocatableArgs_To_config_NodeResourcesAllocatableArgs(in *NodeResourcesAllocatableArgs, out *config.NodeResourcesAllocatableArgs, s conversion.Scope) error {
 	out.Resources = *(*[]configv1.ResourceSpec)(unsafe.Pointer(&in.Resources))
 	out.Mode = config.ModeType(in.Mode)
