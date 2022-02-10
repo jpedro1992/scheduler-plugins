@@ -577,7 +577,7 @@ func makePodsAppGroup(podNames []string, agName string, phase v1.PodPhase) []*v1
 	pds := make([]*v1.Pod, 0)
 	for _, name := range podNames {
 		pod := st.MakePod().Namespace("default").Name(name).Obj()
-		pod.Labels = map[string]string{util.AppGroupLabel: agName}
+		pod.Labels = map[string]string{v1alpha1.AppGroupLabel: agName}
 		pod.Status.Phase = phase
 		pds = append(pds, pod)
 	}
@@ -610,7 +610,7 @@ func makeAG(agName string, numMembers int32, topologySortingAlgorithm string, ap
 
 func makePod(name string, priority int32, appGroup string, requests, limits v1.ResourceList) *v1.Pod {
 	label := make(map[string]string)
-	label[util.AppGroupLabel] = appGroup
+	label[v1alpha1.AppGroupLabel] = appGroup
 	label[util.SelectorLabel] = name
 
 	return &v1.Pod{

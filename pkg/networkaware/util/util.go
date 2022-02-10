@@ -19,7 +19,6 @@ package util
 import (
 	"context"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
@@ -180,7 +179,7 @@ func FindOriginCosts(originList []schedulingv1.OriginInfo, origin string) []sche
 	for low <= high {
 		mid := (low + high) / 2
 		if originList[mid].Origin == origin {
-			return originList[mid].Costs // Return the Costs
+			return originList[mid].Costs // Return the CostInfo
 		} else if originList[mid].Origin < origin {
 			low = mid + 1
 		} else if originList[mid].Origin > origin {
@@ -199,7 +198,7 @@ func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) sched
 	for low <= high {
 		mid := (low + high) / 2
 		if topologyList[mid].TopologyKey == key {
-			return topologyList[mid].OriginCosts // Return the Costs
+			return topologyList[mid].OriginCosts // Return the OriginList
 		} else if topologyList[mid].TopologyKey < key {
 			low = mid + 1
 		} else if topologyList[mid].TopologyKey > key {
@@ -210,7 +209,7 @@ func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) sched
 	return schedulingv1.OriginList{}
 }
 
-// May I need to sort the previous vector?
+/*
 func FindOriginBandwidthCapacity(costList []schedulingv1.CostInfo, destination string) resource.Quantity {
 	low := 0
 	high := len(costList) - 1
@@ -228,6 +227,7 @@ func FindOriginBandwidthCapacity(costList []schedulingv1.CostInfo, destination s
 	// Bandwidth Capacity not found
 	return resource.MustParse("0")
 }
+*/
 
 // assignedPod selects pods that are assigned (scheduled and running).
 func AssignedPod(pod *v1.Pod) bool {

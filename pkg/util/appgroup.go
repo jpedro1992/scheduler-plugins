@@ -27,25 +27,8 @@ import (
 )
 
 const (
-// AppGroupLabel is the default label of the AppGroup for the network-aware framework
-AppGroupLabel = "app-group.scheduling.sigs.k8s.io"
-
 // SelectorLabel is the default selector label for Pods belonging to a given AppGroup (e.g., app = myApp)
 SelectorLabel = "app"
-
-// Topological Sorting algorithms supported by AppGroup
-AppGroupKahnSort      = "KahnSort"
-AppGroupTarjanSort    = "TarjanSort"
-AppGroupReverseKahn   = "ReverseKahn"
-AppGroupReverseTarjan = "ReverseTarjan"
-AppGroupAlternateKahn   = "AlternateKahn"
-AppGroupAlternateTarjan = "AlternateTarjan"
-
-// Different Workload types supported by the AppGroup controller
-AppGroupKindDeployment = "Deployment"
-AppGroupKindReplicaSet = "ReplicaSet"
-AppGroupKindStatefulSet = "StatefulSet"
-AppGroupKindService = "Service"
 )
 
 type NodeAddressType string
@@ -87,7 +70,7 @@ func FindWorkloadByName(workloadList schedulingv1.AppGroupWorkloadList, name str
 	for low <= high {
 		mid := (low + high) / 2
 		if workloadList[mid].Workload.Name == name {
-			return workloadList[mid].Workload // Return the Costs
+			return workloadList[mid].Workload // Return the WorkloadInfo
 		} else if workloadList[mid].Workload.Name < name {
 			low = mid + 1
 		} else if workloadList[mid].Workload.Name > name {
@@ -100,17 +83,17 @@ func FindWorkloadByName(workloadList schedulingv1.AppGroupWorkloadList, name str
 
 // GetPodAppGroupLabel get app group from pod annotations
 func GetPodAppGroupLabel(pod *v1.Pod) string {
-	return pod.Labels[AppGroupLabel]
+	return pod.Labels[schedulingv1.AppGroupLabel]
 }
 
 // GetServiceAppGroupLabel get app group from pod annotations
 func GetServiceAppGroupLabel(service *v1.Service) string {
-	return service.Labels[AppGroupLabel]
+	return service.Labels[schedulingv1.AppGroupLabel]
 }
 
 // GetDeploymentAppGroupLabel get app group from pod annotations
 func GetDeploymentAppGroupLabel(deployment *appsv1beta2.Deployment) string {
-	return deployment.Labels[AppGroupLabel]
+	return deployment.Labels[schedulingv1.AppGroupLabel]
 }
 
 // GetAppGroupFullName get namespaced group name from pod annotations

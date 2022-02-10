@@ -135,9 +135,9 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
-	ls := pod.GetLabels()
+	// ls := pod.GetLabels()
 	for _, p := range appGroup.Spec.Workloads {
-		if p.Workload.Name == ls[util.SelectorLabel] {
+		if p.Workload.Name == pod.Name{ //ls[util.SelectorLabel] {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
@@ -152,7 +152,7 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	}
 
 	// Get pods from lister
-	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
+	selector := labels.Set(map[string]string{v1alpha1.AppGroupLabel: agName}).AsSelector()
 	pods, err := no.podLister.List(selector)
 	if err != nil {
 		klog.ErrorS(err, "Error while returning pods from appGroup, return")
@@ -166,20 +166,6 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
 	scheduledList := getScheduledList(pods)
-
-	/*
-	networkawareutil.ScheduledList{}
-	for _, p := range pods {
-		if networkawareutil.AssignedPod(p) {
-			scheduledInfo := networkawareutil.ScheduledInfo{
-				WorkloadName:   util.GetDeploymentName(p),
-				ReplicaID: string(p.GetUID()),
-				Hostname:  p.Spec.NodeName,
-			}
-			scheduledList = append(scheduledList, scheduledInfo)
-		}
-	}
-	*/
 
 	klog.V(4).Info("scheduledList: ", scheduledList)
 
@@ -302,9 +288,9 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 
 	// Check Dependencies of the given pod
 	var dependencyList []v1alpha1.DependenciesInfo
-	ls := pod.GetLabels()
+	// ls := pod.GetLabels()
 	for _, p := range appGroup.Spec.Workloads {
-		if p.Workload.Name == ls[util.SelectorLabel] {
+		if p.Workload.Name == pod.Name{ //ls[util.SelectorLabel] {
 			for _, dependency := range p.Dependencies {
 				dependencyList = append(dependencyList, dependency)
 			}
@@ -319,7 +305,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	}
 
 	// Get pods from lister
-	selector := labels.Set(map[string]string{util.AppGroupLabel: agName}).AsSelector()
+	selector := labels.Set(map[string]string{v1alpha1.AppGroupLabel: agName}).AsSelector()
 	pods, err := no.podLister.List(selector)
 	if err != nil {
 		return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pods from lister: %v", err))

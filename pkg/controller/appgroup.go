@@ -332,7 +332,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	}
 
 	agCopy := ag.DeepCopy()
-	selector := labels.Set(map[string]string{util.AppGroupLabel: agCopy.Name}).AsSelector()
+	selector := labels.Set(map[string]string{schedv1alpha1.AppGroupLabel: agCopy.Name}).AsSelector()
 
 	pods, err := ctrl.podLister.List(selector)
 	if err != nil {
@@ -415,42 +415,42 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, wo
 
 	// Calculate order based on the specified algorithm
 	switch algorithm {
-	case util.AppGroupKahnSort:
+	case schedv1alpha1.AppGroupKahnSort:
 		klog.V(5).InfoS("Sorting Algorithm identified as KahnSort")
 		order, err = util.KahnSort(tree)
 		if err != nil {
 			klog.ErrorS(err, "KahnSort failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case util.AppGroupTarjanSort:
+	case schedv1alpha1.AppGroupTarjanSort:
 		klog.V(5).InfoS("Sorting Algorithm identified as TarjanSort")
 		order, err = util.TarjanSort(tree)
 		if err != nil {
 			klog.ErrorS(err, "TarjanSort failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case util.AppGroupReverseKahn:
+	case schedv1alpha1.AppGroupReverseKahn:
 		klog.V(5).InfoS("Sorting Algorithm identified as ReverseKahn")
 		order, err = util.ReverseKahn(tree)
 		if err != nil {
 			klog.ErrorS(err, "ReverseKahn failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case util.AppGroupReverseTarjan:
+	case schedv1alpha1.AppGroupReverseTarjan:
 		klog.V(5).InfoS("Sorting Algorithm identified as ReverseTarjan")
 		order, err = util.ReverseTarjan(tree)
 		if err != nil {
 			klog.ErrorS(err, "ReverseTarjan failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case util.AppGroupAlternateKahn:
+	case schedv1alpha1.AppGroupAlternateKahn:
 		klog.V(5).InfoS("Sorting Algorithm identified as AlternateKahn")
 		order, err = util.AlternateKahn(tree)
 		if err != nil {
 			klog.ErrorS(err, "AlternateKahn failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case util.AppGroupAlternateTarjan:
+	case schedv1alpha1.AppGroupAlternateTarjan:
 		klog.V(5).InfoS("Sorting Algorithm identified as AlternateTarjan")
 		order, err = util.AlternateTarjan(tree)
 		if err != nil {

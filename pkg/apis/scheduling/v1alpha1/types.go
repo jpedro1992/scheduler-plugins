@@ -112,6 +112,17 @@ const (
 
 	// PodGroupLabel is the default label of coscheduling
 	PodGroupLabel = "pod-group." + scheduling.GroupName
+
+	// AppGroupLabel is the default label of the AppGroup for the network-aware framework
+	AppGroupLabel = "app-group." + scheduling.GroupName
+
+	// Topological Sorting algorithms supported by AppGroup
+	AppGroupKahnSort      = "KahnSort"
+	AppGroupTarjanSort    = "TarjanSort"
+	AppGroupReverseKahn   = "ReverseKahn"
+	AppGroupReverseTarjan = "ReverseTarjan"
+	AppGroupAlternateKahn   = "AlternateKahn"
+	AppGroupAlternateTarjan = "AlternateTarjan"
 )
 
 // +genclient
