@@ -9,32 +9,37 @@ spec:
   workloads:
     - workload:
         kind: Deployment
+        name: P1-deployment
+        selector: P1
         apiVersion: apps/v1
         namespace: default
-        name: P1
       dependencies:
         - workload:
             kind: Deployment
+            name: P2-deployment
+            selector: P2
             apiVersion: apps/v1
             namespace: default
-            name: P2
           minBandwidth: "100Mi"
           maxNetworkCost: 30
     - workload:
         kind: Deployment
+        name: P2-deployment
+        selector: P2
         apiVersion: apps/v1
         namespace: default
-        name: P2
       dependencies:
         - workload:
             kind: Deployment
+            name: P3-deployment
+            selector: P3
             apiVersion: apps/v1
             namespace: default
-            name: P3
           minBandwidth: "250Mi"
           maxNetworkCost: 20
     - workload:
         kind: Deployment
+        name: P3-deployment
+        selector: P3
         apiVersion: apps/v1
         namespace: default
-        name: P3

@@ -112,17 +112,6 @@ const (
 
 	// PodGroupLabel is the default label of coscheduling
 	PodGroupLabel = "pod-group." + scheduling.GroupName
-
-	// AppGroupLabel is the default label of the AppGroup for the network-aware framework
-	AppGroupLabel = "app-group." + scheduling.GroupName
-
-	// Topological Sorting algorithms supported by AppGroup
-	AppGroupKahnSort      = "KahnSort"
-	AppGroupTarjanSort    = "TarjanSort"
-	AppGroupReverseKahn   = "ReverseKahn"
-	AppGroupReverseTarjan = "ReverseTarjan"
-	AppGroupAlternateKahn   = "AlternateKahn"
-	AppGroupAlternateTarjan = "AlternateTarjan"
 )
 
 // +genclient
@@ -223,6 +212,23 @@ type AppGroup struct {
 	Status AppGroupStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
+// Constants for AppGroup
+const (
+	// AppGroupLabel is the default label of the AppGroup for the network-aware framework
+	AppGroupLabel = "app-group." + scheduling.GroupName
+
+	// AppGroupSelectorLabel is the default selector label for Pods belonging to a given Workload (e.g., workload = App-A)
+	AppGroupSelectorLabel = "workload"
+
+	// Topological Sorting algorithms supported by AppGroup
+	AppGroupKahnSort      = "KahnSort"
+	AppGroupTarjanSort    = "TarjanSort"
+	AppGroupReverseKahn   = "ReverseKahn"
+	AppGroupReverseTarjan = "ReverseTarjan"
+	AppGroupAlternateKahn   = "AlternateKahn"
+	AppGroupAlternateTarjan = "AlternateTarjan"
+)
+
 // AppGroupSpec represents the template of a app group.
 type AppGroupSpec struct {
 	// NumMembers defines the number of Pods belonging to the App Group
@@ -254,16 +260,19 @@ type AppGroupWorkloadInfo struct {
 	// Name represents the workload, info: http://kubernetes.io/docs/user-guide/identifiers#names
 	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
 
+	// Selector defines how to find Pods related to the Workload (key = workload). (e.g., workload=w1)
+	Selector string `json:"selector,omitempty" protobuf:"bytes,3,opt,name=selector"`
+
 	// ApiVersion defines the versioned schema of an object.
 	//+optional
-	APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,3,opt,name=apiVersion"`
+	APIVersion string `json:"apiVersion,omitempty" protobuf:"bytes,4,opt,name=apiVersion"`
 
 	// Namespace of the workload
 	//+optional
-	Namespace string `json:"namespace,omitempty" protobuf:"bytes,4,opt,name=namespace"`
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,5,opt,name=namespace"`
 }
 
-// AppGroupPodList contains an array of Pod objects.
+// AppGroupWorkloadList contains an array of Pod objects.
 // +protobuf=true
 type AppGroupWorkloadList []AppGroupWorkload
 
@@ -299,7 +308,7 @@ type AppGroupStatus struct {
 	TopologyCalculationTime metav1.Time `json:"topologyCalculationTime,omitempty" protobuf:"bytes,3,opt,name=topologyCalculationTime"`
 
 	// Topology order for TopSort plugin (QueueSort)
-	TopologyOrder TopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,4,rep,name=topologyOrder,casttype=TopologyList"`
+	TopologyOrder AppGroupTopologyList `json:"topologyOrder,omitempty" protobuf:"bytes,4,rep,name=topologyOrder,casttype=TopologyList"`
 }
 
 // AppGroupTopologyInfo represents the calculated order for a given Workload.
@@ -314,7 +323,7 @@ type AppGroupTopologyInfo struct {
 
 // TopologyList contains an array of workload indexes for the TopologySorting plugin.
 // +protobuf=true
-type TopologyList []AppGroupTopologyInfo
+type AppGroupTopologyList []AppGroupTopologyInfo
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -328,6 +337,24 @@ type AppGroupList struct {
 	// Items is the list of AppGroup
 	Items []AppGroup `json:"items"`
 }
+
+// TopologyKey is the key of a OriginList in a NetworkTopology.
+type TopologyKey string
+
+// WeightName is the key/Name given to a TopologyList in a NetworkTopology.
+type WeightName string
+
+// Constants for Network Topology
+const (
+	// NetworkTopologyRegion corresponds to "topology.kubernetes.io/region"
+	NetworkTopologyRegion TopologyKey = v1.LabelTopologyRegion
+
+	// NetworkTopologyRegion corresponds to "topology.kubernetes.io/zone"
+	NetworkTopologyZone TopologyKey = v1.LabelTopologyZone
+
+	// NetworkTopologyNetperfCosts corresponds to costs defined with measurements via the Netperf Component: "NetperfCosts"
+	NetworkTopologyNetperfCosts string = "NetperfCosts"
+)
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -371,9 +398,9 @@ type NetworkTopologyStatus struct {
 // +protobuf=true
 type WeightList []WeightInfo
 
-// CostList contains an array of OriginInfo objects.
+// TopologyList contains an array of OriginInfo objects.
 // +protobuf=true
-type CostList []TopologyInfo
+type TopologyList []TopologyInfo
 
 // WeightInfo contains information about all network costs for a given algorithm.
 // +protobuf=true
@@ -381,18 +408,18 @@ type WeightInfo struct {
 	// Algorithm Name for network cost calculation (e.g., userDefined)
 	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 
-	// Costs between regions
-	CostList CostList `json:"costList,omitempty" protobuf:"bytes,2,opt,name=costList,casttype=CostList"`
+	// TopologyList owns Costs between origins
+	TopologyList TopologyList `json:"topologyList,omitempty" protobuf:"bytes,2,opt,name=topologyList,casttype=TopologyList"`
 }
 
 // TopologyInfo contains information about network costs for a particular Topology Key.
 // +protobuf=true
 type TopologyInfo struct {
 	// Topology key (e.g., "topology.kubernetes.io/region", "topology.kubernetes.io/zone").
-	TopologyKey string `json:"topologyKey,omitempty" protobuf:"bytes,1,opt,name=topologyKey"`
+	TopologyKey TopologyKey `json:"topologyKey,omitempty" protobuf:"bytes,1,opt,name=topologyKey"` // add as enum instead of string
 
-	// OriginCosts for a particular origin.
-	OriginCosts OriginList `json:"originCosts,omitempty" protobuf:"bytes,2,rep,name=originCosts,casttype=OriginList"`
+	// OriginList for a particular origin.
+	OriginList OriginList `json:"originList,omitempty" protobuf:"bytes,2,rep,name=originList,casttype=OriginList"`
 }
 
 // OriginList contains an array of OriginInfo objects.
@@ -406,8 +433,12 @@ type OriginInfo struct {
 	Origin string `json:"origin,omitempty" protobuf:"bytes,1,opt,name=origin"`
 
 	// Costs for the particular origin.
-	Costs []CostInfo `json:"costs,omitempty" protobuf:"bytes,2,rep,name=costs,casttype=CostInfo"`
+	CostList CostList `json:"costList,omitempty" protobuf:"bytes,2,rep,name=costList,casttype=CostList"`
 }
+
+// CostList contains an array of CostInfo objects.
+// +protobuf=true
+type CostList []CostInfo
 
 // CostInfo contains information about networkCosts.
 // +protobuf=true

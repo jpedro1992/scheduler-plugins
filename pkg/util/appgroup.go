@@ -18,7 +18,6 @@ package util
 
 import (
 	"fmt"
-	appsv1beta2 "k8s.io/api/apps/v1beta2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
@@ -26,41 +25,36 @@ import (
 	"strings"
 )
 
-const (
-// SelectorLabel is the default selector label for Pods belonging to a given AppGroup (e.g., app = myApp)
-SelectorLabel = "app"
-)
-
 type NodeAddressType string
 
-// Sort AppGroupTopology by Workload Name
-type ByWorkloadName []schedulingv1.AppGroupTopologyInfo
+// Sort AppGroupTopology by Workload Selector
+type ByWorkloadSelector []schedulingv1.AppGroupTopologyInfo
 
-func (s ByWorkloadName) Len() int {
+func (s ByWorkloadSelector) Len() int {
 	return len(s)
 }
 
-func (s ByWorkloadName) Swap(i, j int) {
+func (s ByWorkloadSelector) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s ByWorkloadName) Less(i, j int) bool {
-	return s[i].Workload.Name < s[j].Workload.Name
+func (s ByWorkloadSelector) Less(i, j int) bool {
+	return s[i].Workload.Selector < s[j].Workload.Selector
 }
 
-// Sort AppGroupWorkloadInfo by Workload Name
-type ByName []schedulingv1.AppGroupWorkload
+// Sort AppGroupWorkloadInfo by Selector
+type BySelector []schedulingv1.AppGroupWorkload
 
-func (s ByName) Len() int {
+func (s BySelector) Len() int {
 	return len(s)
 }
 
-func (s ByName) Swap(i, j int) {
+func (s BySelector) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s ByName) Less(i, j int) bool {
-	return s[i].Workload.Name < s[j].Workload.Name
+func (s BySelector) Less(i, j int) bool {
+	return s[i].Workload.Selector < s[j].Workload.Selector
 }
 
 func FindWorkloadByName(workloadList schedulingv1.AppGroupWorkloadList, name string) schedulingv1.AppGroupWorkloadInfo {
@@ -86,6 +80,7 @@ func GetPodAppGroupLabel(pod *v1.Pod) string {
 	return pod.Labels[schedulingv1.AppGroupLabel]
 }
 
+/*
 // GetServiceAppGroupLabel get app group from pod annotations
 func GetServiceAppGroupLabel(service *v1.Service) string {
 	return service.Labels[schedulingv1.AppGroupLabel]
@@ -104,10 +99,11 @@ func GetPodAppGroupFullName(pod *v1.Pod) string {
 	}
 	return fmt.Sprintf("%v/%v", pod.Namespace, agName)
 }
+*/
 
-// GetDeploymentName get workloadName from pod annotations
-func GetDeploymentName(pod *v1.Pod) string {
-	return pod.Labels[SelectorLabel]
+// GetPodAppGroupSelector get selector from pod annotations
+func GetPodAppGroupSelector(pod *v1.Pod) string {
+	return pod.Labels[schedulingv1.AppGroupSelectorLabel]
 }
 
 // Implementation of Topology Sorting algorithms based on https://github.com/otaviokr/topological-sort

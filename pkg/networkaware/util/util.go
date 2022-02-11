@@ -21,7 +21,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	schedulingv1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	clientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	informers "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions"
 	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
@@ -34,8 +34,11 @@ type CostKey struct {
 }
 
 type ScheduledInfo struct {
-	// Workload Name
-	WorkloadName string
+	// Pod Name
+	Name string
+
+	// Pod AppGroup Selector
+	Selector string
 
 	// Replica ID
 	ReplicaID string
@@ -75,7 +78,7 @@ func GetNodeZone(node *v1.Node) string {
 }
 
 // Sort TopologyInfo by TopologyKey
-type ByTopologyKey []schedulingv1.TopologyInfo
+type ByTopologyKey []v1alpha1.TopologyInfo
 
 func (s ByTopologyKey) Len() int {
 	return len(s)
@@ -90,7 +93,7 @@ func (s ByTopologyKey) Less(i, j int) bool {
 }
 
 // Sort OriginInfo by Origin (e.g., Region Name, Zone Name)
-type ByOrigin []schedulingv1.OriginInfo
+type ByOrigin []v1alpha1.OriginInfo
 
 func (s ByOrigin) Len() int {
 	return len(s)
@@ -105,7 +108,7 @@ func (s ByOrigin) Less(i, j int) bool {
 }
 
 // Sort CostInfo by Destination (e.g., Region Name, Zone Name)
-type ByDestination []schedulingv1.CostInfo
+type ByDestination []v1alpha1.CostInfo
 
 func (s ByDestination) Len() int {
 	return len(s)
@@ -155,31 +158,31 @@ func FindPodMaxNetworkCost(d []schedulingv1.DependenciesInfo, podName string) in
 }
 */
 
-func FindPodOrder(t schedulingv1.TopologyList, workloadName string) int32 {
+func FindPodOrder(t v1alpha1.AppGroupTopologyList, selector string) int32 {
 	low := 0
 	high := len(t) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
-		if t[mid].Workload.Name == workloadName {
+		if t[mid].Workload.Selector == selector {
 			return t[mid].Index // Return the index
-		} else if t[mid].Workload.Name < workloadName {
+		} else if t[mid].Workload.Selector < selector {
 			low = mid + 1
-		} else if t[mid].Workload.Name > workloadName {
+		} else if t[mid].Workload.Selector > selector {
 			high = mid - 1
 		}
 	}
 	return -1
 }
 
-func FindOriginCosts(originList []schedulingv1.OriginInfo, origin string) []schedulingv1.CostInfo {
+func FindOriginCosts(originList []v1alpha1.OriginInfo, origin string) []v1alpha1.CostInfo {
 	low := 0
 	high := len(originList) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
 		if originList[mid].Origin == origin {
-			return originList[mid].Costs // Return the CostInfo
+			return originList[mid].CostList // Return the CostList
 		} else if originList[mid].Origin < origin {
 			low = mid + 1
 		} else if originList[mid].Origin > origin {
@@ -187,18 +190,18 @@ func FindOriginCosts(originList []schedulingv1.OriginInfo, origin string) []sche
 		}
 	}
 	// Costs were not found
-	return []schedulingv1.CostInfo{}
+	return []v1alpha1.CostInfo{}
 }
 
 
-func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) schedulingv1.OriginList {
+func FindTopologyKey(topologyList []v1alpha1.TopologyInfo, key v1alpha1.TopologyKey) v1alpha1.OriginList {
 	low := 0
 	high := len(topologyList) - 1
 
 	for low <= high {
 		mid := (low + high) / 2
 		if topologyList[mid].TopologyKey == key {
-			return topologyList[mid].OriginCosts // Return the OriginList
+			return topologyList[mid].OriginList // Return the OriginList
 		} else if topologyList[mid].TopologyKey < key {
 			low = mid + 1
 		} else if topologyList[mid].TopologyKey > key {
@@ -206,7 +209,7 @@ func FindTopologyKey(topologyList []schedulingv1.TopologyInfo, key string) sched
 		}
 	}
 	// Topology Key was not found
-	return schedulingv1.OriginList{}
+	return v1alpha1.OriginList{}
 }
 
 /*

@@ -8,19 +8,22 @@ spec:
   workloads:
     - workload:
         kind: Deployment
+        name: redis-leader-deployment
+        selector: redis-leader
         apiVersion: apps/v1
         namespace: default
-        name: redis-leader
       dependencies:
         - workload:
             kind: Deployment
+            name: redis-follower-deployment
+            selector: redis-follower
             apiVersion: apps/v1
             namespace: default
-            name: redis-follower
           minBandwidth: "100Mi"
           maxNetworkCost: 80
     - workload:
         kind: Deployment
+        name: redis-follower-deployment
+        selector: redis-follower
         apiVersion: apps/v1
         namespace: default
-        name: redis-follower

@@ -46,13 +46,19 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	schedv1alpha1 "sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	schedinformer "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions/scheduling/v1alpha1"
 	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 
 )
+
+const(
+	timeLimitation = 48*time.Hour
+
+)
+
 
 // AppGroupController is a controller that process App groups using provided Handler interface
 type AppGroupController struct {
@@ -155,11 +161,11 @@ func (ctrl *AppGroupController) agAdded(obj interface{}) {
 		return
 	}
 
-	ag := obj.(*schedv1alpha1.AppGroup)
+	ag := obj.(*v1alpha1.AppGroup)
 
 	// If startScheduleTime - createTime > 2days, do not enqueue again because pod may have been GCed
 	if ag.Status.RunningWorkloads == 0 &&
-		ag.Status.ScheduleStartTime.Sub(ag.CreationTimestamp.Time) > 48*time.Hour {
+		ag.Status.ScheduleStartTime.Sub(ag.CreationTimestamp.Time) > timeLimitation { // Add as a constant
 		return
 	}
 
@@ -332,7 +338,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	}
 
 	agCopy := ag.DeepCopy()
-	selector := labels.Set(map[string]string{schedv1alpha1.AppGroupLabel: agCopy.Name}).AsSelector()
+	selector := labels.Set(map[string]string{v1alpha1.AppGroupLabel: agCopy.Name}).AsSelector()
 
 	pods, err := ctrl.podLister.List(selector)
 	if err != nil {
@@ -382,7 +388,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	return err
 }
 
-func (ctrl *AppGroupController) patchAppGroup(old, new *schedv1alpha1.AppGroup) error {
+func (ctrl *AppGroupController) patchAppGroup(old, new *v1alpha1.AppGroup) error {
 	if !reflect.DeepEqual(old, new) {
 		patch, err := util.CreateMergePatch(old, new)
 		if err != nil {
@@ -399,10 +405,10 @@ func (ctrl *AppGroupController) patchAppGroup(old, new *schedv1alpha1.AppGroup) 
 }
 
 // Calculate the correct sequence order for deployment to be used by the TopologicalSort Plugin
-func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, workloadList schedv1alpha1.AppGroupWorkloadList, err error) (schedv1alpha1.TopologyList, error) {
+func calculateTopologyOrder(agCopy *v1alpha1.AppGroup, algorithm string, workloadList v1alpha1.AppGroupWorkloadList, err error) (v1alpha1.AppGroupTopologyList, error) {
 
 	var order []string
-	var topologyList schedv1alpha1.TopologyList
+	var topologyList v1alpha1.AppGroupTopologyList
 	tree := map[string][]string{}
 
 	for _, w := range workloadList {
@@ -415,42 +421,42 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, wo
 
 	// Calculate order based on the specified algorithm
 	switch algorithm {
-	case schedv1alpha1.AppGroupKahnSort:
+	case v1alpha1.AppGroupKahnSort:
 		klog.V(5).InfoS("Sorting Algorithm identified as KahnSort")
 		order, err = util.KahnSort(tree)
 		if err != nil {
 			klog.ErrorS(err, "KahnSort failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case schedv1alpha1.AppGroupTarjanSort:
+	case v1alpha1.AppGroupTarjanSort:
 		klog.V(5).InfoS("Sorting Algorithm identified as TarjanSort")
 		order, err = util.TarjanSort(tree)
 		if err != nil {
 			klog.ErrorS(err, "TarjanSort failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case schedv1alpha1.AppGroupReverseKahn:
+	case v1alpha1.AppGroupReverseKahn:
 		klog.V(5).InfoS("Sorting Algorithm identified as ReverseKahn")
 		order, err = util.ReverseKahn(tree)
 		if err != nil {
 			klog.ErrorS(err, "ReverseKahn failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case schedv1alpha1.AppGroupReverseTarjan:
+	case v1alpha1.AppGroupReverseTarjan:
 		klog.V(5).InfoS("Sorting Algorithm identified as ReverseTarjan")
 		order, err = util.ReverseTarjan(tree)
 		if err != nil {
 			klog.ErrorS(err, "ReverseTarjan failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case schedv1alpha1.AppGroupAlternateKahn:
+	case v1alpha1.AppGroupAlternateKahn:
 		klog.V(5).InfoS("Sorting Algorithm identified as AlternateKahn")
 		order, err = util.AlternateKahn(tree)
 		if err != nil {
 			klog.ErrorS(err, "AlternateKahn failed", "AppGroup", klog.KObj(agCopy))
 			return topologyList, err
 		}
-	case schedv1alpha1.AppGroupAlternateTarjan:
+	case v1alpha1.AppGroupAlternateTarjan:
 		klog.V(5).InfoS("Sorting Algorithm identified as AlternateTarjan")
 		order, err = util.AlternateTarjan(tree)
 		if err != nil {
@@ -467,18 +473,19 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, wo
 		}
 	}
 
-	// Sort workload data by name
-	sort.Sort(util.ByName(agCopy.Spec.Workloads))
+	// Sort workload data by Selector
+	sort.Sort(util.BySelector(agCopy.Spec.Workloads))
 
 	for id, workloadName := range order {
 		index := int32(id + 1)
 		// Find workload data by name (Binary Search)
 		w := util.FindWorkloadByName(agCopy.Spec.Workloads, workloadName)
 
-		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
-			Workload: schedv1alpha1.AppGroupWorkloadInfo{
+		topologyList = append(topologyList, v1alpha1.AppGroupTopologyInfo{
+			Workload: v1alpha1.AppGroupWorkloadInfo{
 				Kind:       w.Kind,
 				Name:       w.Name,
+				Selector:   w.Selector,
 				APIVersion: w.APIVersion,
 				Namespace:  w.Namespace,
 			},
@@ -486,30 +493,30 @@ func calculateTopologyOrder(agCopy *schedv1alpha1.AppGroup, algorithm string, wo
 		})
 	}
 
-	// Sort TopologyList by Workload Name
+	// Sort TopologyList by Selector
 	klog.V(5).Infof("Sort Topology List by workload name... ")
-	sort.Sort(util.ByWorkloadName(topologyList))
+	sort.Sort(util.ByWorkloadSelector(topologyList))
 
 	klog.V(5).Info("topologyList: ", topologyList)
 	return topologyList, nil
 }
 
 // Calculate the correct sequence order for deployment to be used by the TopologicalSort Plugin
-func defaultTopologyOrder(workloadList schedv1alpha1.AppGroupWorkloadList) schedv1alpha1.TopologyList {
-	var topologyList schedv1alpha1.TopologyList
+func defaultTopologyOrder(workloadList v1alpha1.AppGroupWorkloadList) v1alpha1.AppGroupTopologyList {
+	var topologyList v1alpha1.AppGroupTopologyList
 	var i int32
 	i = 1
 	for _, w := range workloadList {
-		topologyList = append(topologyList, schedv1alpha1.AppGroupTopologyInfo{
+		topologyList = append(topologyList, v1alpha1.AppGroupTopologyInfo{
 			Workload: w.Workload,
 			Index:   i,
 		})
 		i+=1
 	}
 
-	// Sort TopologyList by Workload Name
+	// Sort TopologyList by Selector
 	klog.V(5).Infof("Sort Topology List by workload name... ")
-	sort.Sort(util.ByWorkloadName(topologyList))
+	sort.Sort(util.ByWorkloadSelector(topologyList))
 
 	klog.V(5).Info("topologyList: ", topologyList)
 	return topologyList

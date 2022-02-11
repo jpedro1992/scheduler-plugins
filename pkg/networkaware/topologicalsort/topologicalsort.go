@@ -105,31 +105,31 @@ func (ts *TopologicalSort) Less(pInfo1, pInfo2 *framework.QueuedPodInfo) bool {
 		labelsP2 := pInfo2.Pod.GetLabels()
 
 		// Binary search to find both order index since topology list is ordered by Workload Name
-		var orderP1 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP1[util.SelectorLabel])
-		var orderP2 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP2[util.SelectorLabel])
+		var orderP1 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP1[v1alpha1.AppGroupSelectorLabel])
+		var orderP2 = networkawareutil.FindPodOrder(appGroup.Status.TopologyOrder, labelsP2[v1alpha1.AppGroupSelectorLabel])
 
-		klog.V(4).Infof("1) Pod %v order: %v", pInfo1.Pod.Name, orderP1)
-		klog.V(4).Infof("2) Pod %v order: %v", pInfo2.Pod.Name, orderP2)
+		klog.V(6).Infof("1) Pod %v order: %v", pInfo1.Pod.Name, orderP1)
+		klog.V(6).Infof("2) Pod %v order: %v", pInfo2.Pod.Name, orderP2)
 
 		// Lower is better, thus invert result!
 		return !(orderP1 > orderP2)
 	} else { // Pods do not belong to the same App Group: follow the strategy from the QoS plugin
-		klog.V(4).Infof("Pods do not belong to the same appGroup: %v and %v", p1AppGroup, p2AppGroup)
+		klog.V(4).Infof("Pods do not belong to the same appGroup: %v and %v, following Qos strategy...", p1AppGroup, p2AppGroup)
 		s := &qos.Sort{}
 		return s.Less(pInfo1, pInfo2)
 	}
 }
 
 func findAppGroupTopologicalSort(agName string, ts *TopologicalSort) (*v1alpha1.AppGroup, error) {
-	klog.V(5).Infof("namespaces: %s", ts.namespaces)
+	klog.V(6).Infof("namespaces: %s", ts.namespaces)
 	var err error
 	for _, namespace := range ts.namespaces {
-		klog.V(5).Infof("data.lister: %v", ts.agLister)
+		klog.V(6).Infof("data.lister: %v", ts.agLister)
 		// AppGroup couldn't be placed in several namespaces simultaneously
 		lister := ts.agLister
 		appGroup, err := (*lister).AppGroups(namespace).Get(agName)
 		if err != nil {
-			klog.V(5).Infof("Cannot get AppGroup from AppGroupNamespaceLister: %v", err)
+			klog.V(4).Infof("Cannot get AppGroup from AppGroupNamespaceLister: %v", err)
 			continue
 		}
 		if appGroup != nil {
