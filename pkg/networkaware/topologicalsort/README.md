@@ -37,7 +37,7 @@ The AppGroup consists of 11 workloads (11 groups of pods) and the topology order
 
 The plugin favors low indexes. Thus, depending on the two pods evaluated in the Less function, the result (bool) is the following: 
 
-<p align="center"><img src="../../kep/260-network-aware-scheduling/figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
+<p align="center"><img src="../../../kep/260-network-aware-scheduling/figs/queueSortExample.png" title="queueSortExample" width="528" class="center"/></p>
 
 For instance, consider the following scheduler config as an example to enable the `TopologicalSort` plugin:
 

@@ -14,7 +14,7 @@ This folder holds the NetworkAware plugins implemented as discussed in the [KEP 
 The `TopologicalSort` **QueueSort** plugin orders pods to be scheduled in an [**AppGroup**](../../manifests/appgroup/crd.yaml) based on their 
 microservice dependencies related to [TopologicalSort](https://en.wikipedia.org/wiki/Topological_sorting).
  
-Further details and examples are described [here](../networkaware/topologicalsort/README.md) 
+Further details and examples are described [here](../networkaware/topologicalsort).
 
 ## NetworkOverhead Plugin (Filter & Score)
 
@@ -22,7 +22,7 @@ The `NetworkOverhead` **Filter & Score** plugin filters out nodes based on micro
 defined in an **AppGroup** and scores nodes with lower network costs (described in a [**NetworkTopology**](../../manifests/networktopology/crd.yaml))
 higher to achieve latency-aware scheduling.
 
-Further details and examples are described [here](../networkaware/networkoverhead/README.md) 
+Further details and examples are described [here](../networkaware/networkoverhead). 
 
 ## Scheduler Config example 
 

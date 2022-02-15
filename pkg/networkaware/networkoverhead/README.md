@@ -155,14 +155,14 @@ spec:
 
 Thus, the cluster topology corresponds to the following network graph:
  
-<p align="center"><img src="../../kep/260-network-aware-scheduling/figs/graph.png" title="graph" width="1000" class="center"/></p>
+<p align="center"><img src="../../../kep/260-network-aware-scheduling/figs/graph.png" title="graph" width="1000" class="center"/></p>
 
 Now, let's consider that we need to schedule one pod corresponding to the workload `P1`. 
 `P2` is an established dependency of `P1`. 
 
 So, nodes that do not respect its network cost requirement (i.e., `maxNetworkCost: 15`) will be filtered out:
 
-<p align="center"><img src="../../kep/260-network-aware-scheduling/figs/filterExample.png" title="filterExample" width="600" class="center"/></p>
+<p align="center"><img src="../../../kep/260-network-aware-scheduling/figs/filterExample.png" title="filterExample" width="600" class="center"/></p>
 
 #### Extension point: Score
 
@@ -264,10 +264,10 @@ profiles:
 
 #### `NetworkOverhead` Score Example
 
-Let's consider the AppGroup CR and NetworkTopology CR shown for the Filter example [here](#networkoverhead-filter-example)
+Let's consider the AppGroup CR and NetworkTopology CR shown for the Filter example [here](#networkoverhead-filter-example).
 
 After filtering nodes with the `NetworkOverhead` plugin, four nodes remain as candidate nodes for the pod corresponding to the workload `P1`. 
 
 Nodes with the lowest combined network costs will be scored higher: 
 
-<p align="center"><img src="../../kep/260-network-aware-scheduling/figs/scoreExample.png" title="scoreExample" width="800" class="center"/></p>
+<p align="center"><img src="../../../kep/260-network-aware-scheduling/figs/scoreExample.png" title="scoreExample" width="800" class="center"/></p>
