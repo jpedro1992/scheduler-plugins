@@ -50,13 +50,13 @@ const (
 
 // NetworkOverhead : Filter and Score nodes based on Pod's AppGroup requirements: MaxNetworkCosts requirements among Pods with dependencies
 type NetworkOverhead struct {
-	handle      framework.Handle
-	podLister   corelisters.PodLister
-	agLister    *schedlister.AppGroupLister
-	ntLister    *schedlister.NetworkTopologyLister
-	namespaces  []string
-	weightsName string
-	ntName      string
+	handle      	framework.Handle
+	podLister   	corelisters.PodLister
+	agLister    	*schedlister.AppGroupLister
+	ntLister    	*schedlister.NetworkTopologyLister
+	namespaces  	[]string
+	weightsName 	v1alpha1.WeightName
+	ntName      	string
 }
 
 // Name : returns name of the plugin.
@@ -140,7 +140,7 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	klog.V(6).Info("Network Topology CR: ", networkTopology.Name)
 
 	// Get Dependencies of the given pod
-	dependencyList := getDependencyList(pod, appGroup)
+	dependencyList := networkawareutil.GetDependencyList(pod, appGroup)
 
 	// If the pod has no dependencies, return
 	if dependencyList == nil {
@@ -161,7 +161,7 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	}
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
-	scheduledList := getScheduledList(pods)
+	scheduledList := networkawareutil.GetScheduledList(pods)
 
 	klog.V(6).Info("scheduledList: ", scheduledList)
 
@@ -235,7 +235,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	klog.V(6).Info("Network Topology CR: ", networkTopology.Name)
 
 	/// Get Dependencies of the given pod
-	dependencyList := getDependencyList(pod, appGroup)
+	dependencyList := networkawareutil.GetDependencyList(pod, appGroup)
 
 	// If the pod has no dependencies, return min score
 	if dependencyList == nil {
@@ -254,7 +254,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	}
 
 	// Pods already scheduled: Deployment name, replicaID, hostname
-	scheduledList := getScheduledList(pods)
+	scheduledList := networkawareutil.GetScheduledList(pods)
 
 	klog.V(6).Info("scheduledList: ", scheduledList)
 
@@ -346,47 +346,6 @@ func getMinMaxScores(scores framework.NodeScoreList) (int64, int64) {
 	}
 
 	return min, max
-}
-
-// getScheduledList : get Pods already scheduled in the cluster for that specific AppGroup
-func getScheduledList(pods []*v1.Pod) networkawareutil.ScheduledList {
-	// scheduledList: Deployment name, replicaID, hostname
-	scheduledList := networkawareutil.ScheduledList{}
-
-	for _, p := range pods {
-		if networkawareutil.AssignedPod(p) {
-			scheduledInfo := networkawareutil.ScheduledInfo{
-				Name:   	p.Name,
-				Selector: 	util.GetPodAppGroupSelector(p),
-				ReplicaID: 	string(p.GetUID()),
-				Hostname:  	p.Spec.NodeName,
-			}
-			scheduledList = append(scheduledList, scheduledInfo)
-		}
-	}
-	return scheduledList
-}
-
-// getDependencyList : get workload dependencies established in the AppGroup CR
-func getDependencyList(pod *v1.Pod, ag *v1alpha1.AppGroup) []v1alpha1.DependenciesInfo {
-
-	// Check Dependencies of the given pod
-	var dependencyList []v1alpha1.DependenciesInfo
-
-	// Get Labels of the given pod
-	podLabels := pod.GetLabels()
-
-	for _, w := range ag.Spec.Workloads {
-		if w.Workload.Selector == podLabels[v1alpha1.AppGroupSelectorLabel] {
-			for _, dependency := range w.Dependencies {
-				dependencyList = append(dependencyList, dependency)
-			}
-		}
-	}
-	klog.V(6).Info("dependencyList: ", dependencyList)
-
-	// Return the dependencyList
-	return dependencyList
 }
 
 // sortNetworkTopologyCosts : sort costs if manual weights were selected

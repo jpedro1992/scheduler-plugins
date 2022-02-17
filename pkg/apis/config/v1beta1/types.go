@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schedulerconfig "k8s.io/kube-scheduler/config/v1"
+	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -191,7 +192,7 @@ type NetworkOverheadArgs struct {
 	Namespaces []string `json:"namespaces,omitempty"`
 
 	// Preferred weights (Default: UserDefined)
-	WeightsName *string `json:"weightsName,omitempty"`
+	WeightsName v1alpha1.WeightName `json:"weightsName,omitempty"`
 
 	// The NetworkTopology CRD name
 	NetworkTopologyName *string `json:"networkTopologyName,omitempty"`

@@ -356,7 +356,7 @@ const (
 	NetworkTopologyNetperfCosts WeightName = "NetperfCosts"
 
 	// NetworkTopologyManualCosts corresponds to costs defined manually
-	// NetworkTopologyManualCosts WeightName = "UserDefined"
+	NetworkTopologyManualCosts WeightName = "UserDefined"
 )
 
 // +genclient
@@ -409,7 +409,7 @@ type TopologyList []TopologyInfo
 // +protobuf=true
 type WeightInfo struct {
 	// Algorithm Name for network cost calculation (e.g., userDefined)
-	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+	Name WeightName `json:"name,omitempty" protobuf:"bytes,1,opt,name=name,casttype=WeightName"`
 
 	// TopologyList owns Costs between origins
 	TopologyList TopologyList `json:"topologyList,omitempty" protobuf:"bytes,2,opt,name=topologyList,casttype=TopologyList"`

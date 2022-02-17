@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
 	"strconv"
 	"testing"
 
@@ -161,7 +162,7 @@ func TestSchedulingDefaults(t *testing.T) {
 			expect: &NetworkOverheadArgs{
 				KubeConfigPath:      pointer.StringPtr("/etc/kubernetes/scheduler.conf"),
 				Namespaces:          []string{"default"},
-				WeightsName:         pointer.StringPtr("UserDefined"),
+				WeightsName:         v1alpha1.NetworkTopologyManualCosts,
 				NetworkTopologyName: pointer.StringPtr("nt-default"),
 			},
 		},

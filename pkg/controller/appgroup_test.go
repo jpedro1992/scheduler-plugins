@@ -51,7 +51,7 @@ func TestAppGroupController_Run(t *testing.T) {
 			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P3-deployment", Selector: "P3", APIVersion: "apps/v1", Namespace:  "default"}},
 	}
 
-	basicTopologyOrder := v1alpha1.TopologyList{
+	basicTopologyOrder := v1alpha1.AppGroupTopologyList{
 		v1alpha1.AppGroupTopologyInfo{
 			Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
 		v1alpha1.AppGroupTopologyInfo{
@@ -118,7 +118,7 @@ func TestAppGroupController_Run(t *testing.T) {
 		},
 	}
 
-	onlineBoutiqueTopologyOrderKahn := v1alpha1.TopologyList{
+	onlineBoutiqueTopologyOrderKahn := v1alpha1.AppGroupTopologyList{
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index: 2},
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 3},
@@ -132,7 +132,7 @@ func TestAppGroupController_Run(t *testing.T) {
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P11-deployment", Selector: "P11", APIVersion: "apps/v1", Namespace: "default"}, Index: 11},
 	}
 
-	onlineBoutiqueTopologyOrderAlternateKahn:= v1alpha1.TopologyList{
+	onlineBoutiqueTopologyOrderAlternateKahn:= v1alpha1.AppGroupTopologyList{
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P1-deployment", Selector: "P1", APIVersion: "apps/v1", Namespace: "default"}, Index: 1},
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P10-deployment", Selector: "P10", APIVersion: "apps/v1", Namespace: "default"}, Index:3},
 		v1alpha1.AppGroupTopologyInfo{Workload: v1alpha1.AppGroupWorkloadInfo{Kind: "Deployment", Name: "P9-deployment", Selector: "P9", APIVersion: "apps/v1", Namespace: "default"}, Index: 5},
@@ -159,7 +159,7 @@ func TestAppGroupController_Run(t *testing.T) {
 		topologySortingAlgorithm 	string
 		workloadList                v1alpha1.AppGroupWorkloadList
 		desiredRunningWorkloads     int32
-		desiredTopologyOrder     	v1alpha1.TopologyList
+		desiredTopologyOrder     	v1alpha1.AppGroupTopologyList
 		appGroupCreateTime       	*metav1.Time
 	}{
 		{

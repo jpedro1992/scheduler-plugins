@@ -25,6 +25,7 @@ import (
 	clientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 	informers "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions"
 	schedlister "sigs.k8s.io/scheduler-plugins/pkg/generated/listers/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
 // key for map concerning network costs (origin / destinations)
@@ -212,26 +213,6 @@ func FindTopologyKey(topologyList []v1alpha1.TopologyInfo, key v1alpha1.Topology
 	return v1alpha1.OriginList{}
 }
 
-/*
-func FindOriginBandwidthCapacity(costList []schedulingv1.CostInfo, destination string) resource.Quantity {
-	low := 0
-	high := len(costList) - 1
-
-	for low <= high {
-		mid := (low + high) / 2
-		if costList[mid].Destination == destination {
-			return costList[mid].BandwidthCapacity // Return the Bandwidth Capacity
-		} else if costList[mid].Destination < destination {
-			low = mid + 1
-		} else if costList[mid].Destination > destination {
-			high = mid - 1
-		}
-	}
-	// Bandwidth Capacity not found
-	return resource.MustParse("0")
-}
-*/
-
 // assignedPod selects pods that are assigned (scheduled and running).
 func AssignedPod(pod *v1.Pod) bool {
 	return len(pod.Spec.NodeName) != 0
@@ -315,4 +296,45 @@ func InitNetworkTopologyInformer(masterOverride, kubeConfigPath *string) (*sched
 	ntInformerFactory.WaitForCacheSync(ctx.Done())
 
 	return &appGroupLister, nil
+}
+
+// GetDependencyList : get workload dependencies established in the AppGroup CR
+func GetDependencyList(pod *v1.Pod, ag *v1alpha1.AppGroup) []v1alpha1.DependenciesInfo {
+
+	// Check Dependencies of the given pod
+	var dependencyList []v1alpha1.DependenciesInfo
+
+	// Get Labels of the given pod
+	podLabels := pod.GetLabels()
+
+	for _, w := range ag.Spec.Workloads {
+		if w.Workload.Selector == podLabels[v1alpha1.AppGroupSelectorLabel] {
+			for _, dependency := range w.Dependencies {
+				dependencyList = append(dependencyList, dependency)
+			}
+		}
+	}
+	klog.V(6).Info("dependencyList: ", dependencyList)
+
+	// Return the dependencyList
+	return dependencyList
+}
+
+// GetScheduledList : get Pods already scheduled in the cluster for that specific AppGroup
+func GetScheduledList(pods []*v1.Pod) ScheduledList {
+	// scheduledList: Deployment name, replicaID, hostname
+	scheduledList := ScheduledList{}
+
+	for _, p := range pods {
+		if AssignedPod(p) {
+			scheduledInfo := ScheduledInfo{
+				Name:   	p.Name,
+				Selector: 	util.GetPodAppGroupSelector(p),
+				ReplicaID: 	string(p.GetUID()),
+				Hostname:  	p.Spec.NodeName,
+			}
+			scheduledList = append(scheduledList, scheduledInfo)
+		}
+	}
+	return scheduledList
 }
