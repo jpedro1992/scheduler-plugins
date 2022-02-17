@@ -353,7 +353,10 @@ const (
 	NetworkTopologyZone TopologyKey = v1.LabelTopologyZone
 
 	// NetworkTopologyNetperfCosts corresponds to costs defined with measurements via the Netperf Component: "NetperfCosts"
-	NetworkTopologyNetperfCosts string = "NetperfCosts"
+	NetworkTopologyNetperfCosts WeightName = "NetperfCosts"
+
+	// NetworkTopologyManualCosts corresponds to costs defined manually
+	// NetworkTopologyManualCosts WeightName = "UserDefined"
 )
 
 // +genclient

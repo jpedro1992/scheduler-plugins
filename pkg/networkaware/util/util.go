@@ -77,8 +77,8 @@ func GetNodeZone(node *v1.Node) string {
 	return region
 }
 
-// Sort TopologyInfo by TopologyKey
-type ByTopologyKey []v1alpha1.TopologyInfo
+// Sort TopologyList by TopologyKey
+type ByTopologyKey v1alpha1.TopologyList
 
 func (s ByTopologyKey) Len() int {
 	return len(s)
@@ -92,8 +92,8 @@ func (s ByTopologyKey) Less(i, j int) bool {
 	return s[i].TopologyKey < s[j].TopologyKey
 }
 
-// Sort OriginInfo by Origin (e.g., Region Name, Zone Name)
-type ByOrigin []v1alpha1.OriginInfo
+// Sort OriginList by Origin (e.g., Region Name, Zone Name)
+type ByOrigin v1alpha1.OriginList
 
 func (s ByOrigin) Len() int {
 	return len(s)
@@ -107,8 +107,8 @@ func (s ByOrigin) Less(i, j int) bool {
 	return s[i].Origin < s[j].Origin
 }
 
-// Sort CostInfo by Destination (e.g., Region Name, Zone Name)
-type ByDestination []v1alpha1.CostInfo
+// Sort CostList by Destination (e.g., Region Name, Zone Name)
+type ByDestination v1alpha1.CostList
 
 func (s ByDestination) Len() int {
 	return len(s)

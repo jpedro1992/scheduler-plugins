@@ -27,8 +27,8 @@ import (
 
 type NodeAddressType string
 
-// Sort AppGroupTopology by Workload Selector
-type ByWorkloadSelector []schedulingv1.AppGroupTopologyInfo
+// Sort AppGroupTopologyList by Workload.Selector
+type ByWorkloadSelector schedulingv1.AppGroupTopologyList
 
 func (s ByWorkloadSelector) Len() int {
 	return len(s)
@@ -42,8 +42,8 @@ func (s ByWorkloadSelector) Less(i, j int) bool {
 	return s[i].Workload.Selector < s[j].Workload.Selector
 }
 
-// Sort AppGroupWorkloadInfo by Selector
-type BySelector []schedulingv1.AppGroupWorkload
+// Sort AppGroupWorkloadList by Selector
+type BySelector schedulingv1.AppGroupWorkloadList
 
 func (s BySelector) Len() int {
 	return len(s)
