@@ -19,6 +19,7 @@ limitations under the License.
 package v1beta3
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strconv"
 
 	v1 "k8s.io/api/core/v1"
@@ -69,6 +70,9 @@ var (
 		{Name: string(v1.ResourceCPU), Weight: 1},
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
+
+	defaultWeightsName         = "UserDefined"
+	defaultNetworkTopologyName = "nt-default"
 )
 
 // SetDefaultsCoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -146,4 +150,26 @@ func SetDefaultsNodeResourceTopologyMatchArgs(obj *NodeResourceTopologyMatchArgs
 // PreemptionTolerationArgs reuses SetDefaults_DefaultPreemptionArgs
 func SetDefaultsPreemptionTolerationArgs(obj *PreemptionTolerationArgs) {
 	k8sschedulerconfigv1beta3.SetDefaults_DefaultPreemptionArgs((*schedulerconfigv1beta3.DefaultPreemptionArgs)(obj))
+}
+
+// SetDefaultsTopologicalSortArgs sets the default parameters for TopologicalSortArgs plugin.
+func SetDefaultsTopologicalSortArgs(obj *TopologicalSortArgs) {
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+}
+
+// SetDefaultsNetworkOverheadArgs sets the default parameters for NetworkMinCostArgs plugin.
+func SetDefaultsNetworkOverheadArgs(obj *NetworkOverheadArgs) {
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+
+	if obj.WeightsName == nil {
+		obj.WeightsName = &defaultWeightsName
+	}
+
+	if obj.NetworkTopologyName == nil {
+		obj.NetworkTopologyName = &defaultNetworkTopologyName
+	}
 }

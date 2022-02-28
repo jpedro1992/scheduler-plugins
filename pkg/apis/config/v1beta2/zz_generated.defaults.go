@@ -45,6 +45,12 @@ func RegisterDefaults(scheme *runtime.Scheme) error {
 	scheme.AddTypeDefaultingFunc(&PreemptionTolerationArgs{}, func(obj interface{}) {
 		SetObjectDefaultsPreemptionTolerationArgs(obj.(*PreemptionTolerationArgs))
 	})
+	scheme.AddTypeDefaultingFunc(&TopologicalSortArgs{}, func(obj interface{}) {
+		SetObjectDefaultsTopologicalSortArgs(obj.(*TopologicalSortArgs))
+	})
+	scheme.AddTypeDefaultingFunc(&NetworkOverheadArgs{}, func(obj interface{}) {
+		SetObjectDefaultsNetworkOverheadArgs(obj.(*NetworkOverheadArgs))
+	})
 	return nil
 }
 
@@ -70,4 +76,12 @@ func SetObjectDefaultsNodeResourceTopologyMatchArgs(in *NodeResourceTopologyMatc
 
 func SetObjectDefaultsPreemptionTolerationArgs(in *PreemptionTolerationArgs) {
 	SetDefaultsPreemptionTolerationArgs(in)
+}
+
+func SetObjectDefaultsTopologicalSortArgs(in *TopologicalSortArgs) {
+	SetDefaultsTopologicalSortArgs(in)
+}
+
+func SetObjectDefaultsNetworkOverheadArgs(in *NetworkOverheadArgs) {
+	SetDefaultsNetworkOverheadArgs(in)
 }

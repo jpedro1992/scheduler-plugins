@@ -18,6 +18,8 @@ package scheme
 
 import (
 	"bytes"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/networkoverhead"
+	"sigs.k8s.io/scheduler-plugins/pkg/networkaware/topologicalsort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -93,6 +95,16 @@ profiles:
     args:
       minCandidateNodesPercentage: 20
       minCandidateNodesAbsolute: 200
+  - name: TopologicalSort
+    args:
+      namespaces:
+      - "networkAware"
+  - name: NetworkOverhead
+    args:
+      namespaces:
+      - "networkAware"
+      weightsName: "netCosts"
+      networkTopologyName: "net-topology-v1"
 `),
 			wantProfiles: []schedconfig.KubeSchedulerProfile{
 				{
@@ -146,6 +158,20 @@ profiles:
 						{
 							Name: preemptiontoleration.Name,
 							Args: &config.PreemptionTolerationArgs{MinCandidateNodesPercentage: 20, MinCandidateNodesAbsolute: 200},
+						},
+						{
+							Name: topologicalsort.Name,
+							Args: &config.TopologicalSortArgs{
+								Namespaces: []string{"networkAware"},
+							},
+						},
+						{
+							Name: networkoverhead.Name,
+							Args: &config.NetworkOverheadArgs{
+								Namespaces:          []string{"networkAware"},
+								WeightsName:         "netCosts",
+								NetworkTopologyName: "net-topology-v1",
+							},
 						},
 						{
 							Name: "DefaultPreemption",
@@ -202,6 +228,10 @@ profiles:
     args:
   - name: PreemptionToleration
     args:
+  - name: TopologicalSort
+    args:
+  - name: NetworkOverhead
+    args:
 `),
 			wantProfiles: []schedconfig.KubeSchedulerProfile{
 				{
@@ -257,6 +287,20 @@ profiles:
 						{
 							Name: preemptiontoleration.Name,
 							Args: &config.PreemptionTolerationArgs{MinCandidateNodesPercentage: 10, MinCandidateNodesAbsolute: 100},
+						},
+						{
+							Name: topologicalsort.Name,
+							Args: &config.TopologicalSortArgs{
+								Namespaces: []string{"default"},
+							},
+						},
+						{
+							Name: networkoverhead.Name,
+							Args: &config.NetworkOverheadArgs{
+								Namespaces:          []string{"default"},
+								WeightsName:         "UserDefined",
+								NetworkTopologyName: "nt-default",
+							},
 						},
 						{
 							Name: "DefaultPreemption",

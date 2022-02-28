@@ -23,6 +23,7 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,8 +38,8 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
-
 	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
+	"sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
 )
 
 var lowPriority, midPriority, highPriority = int32(0), int32(100), int32(1000)
@@ -251,5 +252,37 @@ func createNamespace(t *testing.T, testCtx *testContext, ns string) {
 		ObjectMeta: metav1.ObjectMeta{Name: ns}}, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("Failed to create integration test namespace %s: %v", ns, err)
+	}
+}
+
+func createAppGroups(ctx context.Context, client versioned.Interface, appGroups []*v1alpha1.AppGroup) error {
+	for _, ag := range appGroups {
+		_, err := client.SchedulingV1alpha1().AppGroups(ag.Namespace).Create(ctx, ag, metav1.CreateOptions{})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupAppGroups(ctx context.Context, client versioned.Interface, appGroups []*v1alpha1.AppGroup) {
+	for _, ag := range appGroups {
+		_ = client.SchedulingV1alpha1().AppGroups(ag.Namespace).Delete(ctx, ag.Name, metav1.DeleteOptions{})
+	}
+}
+
+func createNetworkTopologies(ctx context.Context, client versioned.Interface, networkTopologies []*v1alpha1.NetworkTopology) error {
+	for _, nt := range networkTopologies {
+		_, err := client.SchedulingV1alpha1().NetworkTopologies(nt.Namespace).Create(ctx, nt, metav1.CreateOptions{})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupNetworkTopologies(ctx context.Context, client versioned.Interface, networkTopologies []*v1alpha1.NetworkTopology) {
+	for _, nt := range networkTopologies {
+		_ = client.SchedulingV1alpha1().NetworkTopologies(nt.Namespace).Delete(ctx, nt.Name, metav1.DeleteOptions{})
 	}
 }
