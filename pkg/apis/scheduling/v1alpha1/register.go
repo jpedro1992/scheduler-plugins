@@ -51,6 +51,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ElasticQuotaList{},
 		&PodGroup{},
 		&PodGroupList{},
+		&AppGroup{},
+		&AppGroupList{},
+		&NetworkTopology{},
+		&NetworkTopologyList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
