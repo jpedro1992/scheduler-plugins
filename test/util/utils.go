@@ -107,3 +107,28 @@ func PodNotExist(cs clientset.Interface, podNamespace, podName string) bool {
 	_, err := cs.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	return errors.IsNotFound(err)
 }
+
+// MakeAG : returns the AppGroup
+func MakeAG(agName string, numMembers int32, namespace string, topologySortingAlgorithm string, workloadList v1alpha1.AppGroupWorkloadList, topologyOrder []v1alpha1.AppGroupTopologyInfo, createTime *metav1.Time) *v1alpha1.AppGroup {
+	ag := &v1alpha1.AppGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              agName,
+			Namespace:         namespace,
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		Spec: v1alpha1.AppGroupSpec{
+			NumMembers:               numMembers,
+			TopologySortingAlgorithm: topologySortingAlgorithm,
+			Workloads:                workloadList,
+		},
+		Status: v1alpha1.AppGroupStatus{
+			RunningWorkloads:  0,
+			ScheduleStartTime: metav1.Time{Time: time.Now()},
+			TopologyOrder:     topologyOrder,
+		},
+	}
+	if createTime != nil {
+		ag.CreationTimestamp = *createTime
+	}
+	return ag
+}
