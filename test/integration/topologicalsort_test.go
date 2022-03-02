@@ -147,17 +147,17 @@ func TestTopologicalSortPlugin(t *testing.T) {
 		{
 			name: "basic AppGroup",
 			pods: []*v1.Pod{
-				WithContainer(st.MakePod().Namespace(ns).Name("P1-1").Req(map[v1.ResourceName]string{v1.ResourceMemory: "50"}).Priority(
+				WithContainer(st.MakePod().Namespace(ns).Name("p1-1").Req(map[v1.ResourceName]string{v1.ResourceMemory: "50"}).Priority(
 					midPriority).Label(v1alpha1.AppGroupLabel, "basic").Label(v1alpha1.AppGroupSelectorLabel, "P1").ZeroTerminationGracePeriod().Obj(), pause),
-				WithContainer(st.MakePod().Namespace(ns).Name("P2-1").Req(map[v1.ResourceName]string{v1.ResourceMemory: "50"}).Priority(
+				WithContainer(st.MakePod().Namespace(ns).Name("p2-1").Req(map[v1.ResourceName]string{v1.ResourceMemory: "50"}).Priority(
 					midPriority).Label(v1alpha1.AppGroupLabel, "basic").Label(v1alpha1.AppGroupSelectorLabel, "P2").ZeroTerminationGracePeriod().Obj(), pause),
-				WithContainer(st.MakePod().Namespace(ns).Name("P3-1").Req(map[v1.ResourceName]string{v1.ResourceMemory: "50"}).Priority(
+				WithContainer(st.MakePod().Namespace(ns).Name("p3-1").Req(map[v1.ResourceName]string{v1.ResourceMemory: "50"}).Priority(
 					midPriority).Label(v1alpha1.AppGroupLabel, "basic").Label(v1alpha1.AppGroupSelectorLabel, "P3").ZeroTerminationGracePeriod().Obj(), pause),
 			},
 			appGroups: []*v1alpha1.AppGroup{
 				util.MakeAG("basic", 3, ns, "KahnSort", basicAppGroup, basicTopologyOrder, nil),
 			},
-			expectedPods: []string{"P1-1", "P2-1", "P3-1"},
+			expectedPods: []string{"p1-1", "p2-1", "p3-1"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
