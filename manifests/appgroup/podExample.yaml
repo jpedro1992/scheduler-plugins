@@ -1,0 +1,24 @@
+# Example Pod Deployment
+# Bandwidth Requests (via Extended Resources)
+# Bandwidth Limitations (bandwidth CNI plugin)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: network-aware-bandwidth-example
+  annotations:
+    kubernetes.io/ingress-bandwidth: 10M
+    kubernetes.io/egress-bandwidth: 10M
+spec:
+  containers:
+  - name: network-aware-bandwidth-example
+    image: nginx
+    resources:
+      requests:
+        network.aware.com/bandwidth: 10000 # 10M
+      limits:
+        network.aware.com/bandwidth: 10000 # 10M
+
+
+
+
+
