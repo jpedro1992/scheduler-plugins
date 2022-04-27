@@ -403,7 +403,7 @@ type TopologyList []TopologyInfo
 // +protobuf=true
 type WeightInfo struct {
 	// Algorithm Name for network cost calculation (e.g., userDefined)
-	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name,casttype=WeightName"`
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 
 	// TopologyList owns Costs between origins
 	TopologyList TopologyList `json:"topologyList,omitempty" protobuf:"bytes,2,opt,name=topologyList,casttype=TopologyList"`
