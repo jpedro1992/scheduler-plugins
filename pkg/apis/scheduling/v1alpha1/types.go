@@ -341,9 +341,6 @@ type AppGroupList struct {
 // TopologyKey is the key of a OriginList in a NetworkTopology.
 type TopologyKey string
 
-// WeightName is the key/Name given to a TopologyList in a NetworkTopology.
-type WeightName string
-
 // Constants for Network Topology
 const (
 	// NetworkTopologyRegion corresponds to "topology.kubernetes.io/region"
@@ -353,10 +350,7 @@ const (
 	NetworkTopologyZone TopologyKey = v1.LabelTopologyZone
 
 	// NetworkTopologyNetperfCosts corresponds to costs defined with measurements via the Netperf Component: "NetperfCosts"
-	NetworkTopologyNetperfCosts WeightName = "NetperfCosts"
-
-	// NetworkTopologyManualCosts corresponds to costs defined manually
-	NetworkTopologyManualCosts WeightName = "UserDefined"
+	NetworkTopologyNetperfCosts string = "NetperfCosts"
 )
 
 // +genclient
@@ -409,7 +403,7 @@ type TopologyList []TopologyInfo
 // +protobuf=true
 type WeightInfo struct {
 	// Algorithm Name for network cost calculation (e.g., userDefined)
-	Name WeightName `json:"name,omitempty" protobuf:"bytes,1,opt,name=name,casttype=WeightName"`
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name,casttype=WeightName"`
 
 	// TopologyList owns Costs between origins
 	TopologyList TopologyList `json:"topologyList,omitempty" protobuf:"bytes,2,opt,name=topologyList,casttype=TopologyList"`

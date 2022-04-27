@@ -19,8 +19,6 @@ package config
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/scheduler-plugins/pkg/apis/scheduling/v1alpha1"
-
 	// TODO: eliminate the "versioned" import, i.e., schedulerconfig.ResourceSpec should be unversioned.ResourceSpec.
 	schedulerconfig "k8s.io/kube-scheduler/config/v1"
 	unversioned "k8s.io/kubernetes/pkg/scheduler/apis/config"
@@ -185,7 +183,7 @@ type NetworkOverheadArgs struct {
 	Namespaces []string
 
 	// Preferred weights (Default: UserDefined)
-	WeightsName v1alpha1.WeightName
+	WeightsName string
 
 	// The NetworkTopology CRD name
 	NetworkTopologyName string

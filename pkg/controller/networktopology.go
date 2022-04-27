@@ -649,7 +649,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		var manualZoneCosts v1alpha1.OriginList
 
 		for _, w := range ntCopy.Spec.Weights {
-			if w.Name == v1alpha1.NetworkTopologyManualCosts {
+			if w.Name == "UserDefined" {
 				manualCosts = w.TopologyList
 				for _, c := range w.TopologyList {
 					if c.TopologyKey == v1alpha1.NetworkTopologyRegion {
@@ -674,7 +674,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		weights := v1alpha1.WeightList{}
 
 		weights = append(weights, v1alpha1.WeightInfo{
-									Name:           v1alpha1.NetworkTopologyManualCosts,
+									Name:           "UserDefined",
 									TopologyList: 	manualCosts,
 		})
 
@@ -695,7 +695,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		var manualZoneCosts v1alpha1.OriginList
 
 		for _, w := range ntCopy.Spec.Weights {
-			if w.Name == v1alpha1.NetworkTopologyManualCosts {
+			if w.Name == "UserDefined" {
 				manualCosts = w.TopologyList
 				for _, c := range w.TopologyList {
 					if c.TopologyKey == v1alpha1.NetworkTopologyRegion {
@@ -718,7 +718,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		weights := v1alpha1.WeightList{}
 
 		weights = append(weights, v1alpha1.WeightInfo{
-			Name:           v1alpha1.NetworkTopologyManualCosts,
+			Name:           "UserDefined",
 			TopologyList: 	manualCosts,
 		}, )
 
