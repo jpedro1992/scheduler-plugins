@@ -36,27 +36,27 @@ import (
 
 const (
 	// Name : name of plugin used in the plugin registry and configurations.
-	Name         = "NetworkOverhead"
+	Name = "NetworkOverhead"
 
 	// MaxCost : MaxCost used in the NetworkTopology for costs between origins and destinations
-	MaxCost      = 100
+	MaxCost = 100
 
 	// SameHostname : If pods belong to the same host, then consider cost as 0
 	SameHostname = 0
 
 	// SameZone : If pods belong to hosts in the same zone, then consider cost as 1
-	SameZone     = 1
+	SameZone = 1
 )
 
 // NetworkOverhead : Filter and Score nodes based on Pod's AppGroup requirements: MaxNetworkCosts requirements among Pods with dependencies
 type NetworkOverhead struct {
-	handle      	framework.Handle
-	podLister   	corelisters.PodLister
-	agLister    	*schedlister.AppGroupLister
-	ntLister    	*schedlister.NetworkTopologyLister
-	namespaces  	[]string
-	weightsName 	v1alpha1.WeightName
-	ntName      	string
+	handle      framework.Handle
+	podLister   corelisters.PodLister
+	agLister    *schedlister.AppGroupLister
+	ntLister    *schedlister.NetworkTopologyLister
+	namespaces  []string
+	weightsName string
+	ntName      string
 }
 
 // Name : returns name of the plugin.
@@ -155,7 +155,7 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 		return nil
 	}
 
-	if pods == nil{
+	if pods == nil {
 		klog.ErrorS(err, "No pods yet allocated, return")
 		return nil
 	}
@@ -166,7 +166,7 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	klog.V(6).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
-	if scheduledList == nil{
+	if scheduledList == nil {
 		klog.ErrorS(err, "Scheduled list is empty, return")
 		return nil
 	}
@@ -249,7 +249,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 		return score, framework.NewStatus(framework.Error, fmt.Sprintf("getting pods from lister: %v", err))
 	}
 
-	if pods == nil{
+	if pods == nil {
 		return score, framework.NewStatus(framework.Success, "No pods yet allocated: minimum score")
 	}
 
@@ -259,7 +259,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	klog.V(6).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
-	if scheduledList == nil{ //appGroup.Status.PodsScheduled == nil {
+	if scheduledList == nil { //appGroup.Status.PodsScheduled == nil {
 		return score, framework.NewStatus(framework.Success, "No Pods yet allocated for the AppGroup: min score")
 	}
 
