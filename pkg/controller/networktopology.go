@@ -219,7 +219,7 @@ func (ctrl *NetworkTopologyController) nodeAdded(obj interface{}) {
 		// ctrl.nodeGraph.AddEdge(node.Name, node.Name, 0)
 
 	}()
-	klog.Infof("Added node %v - Total node count: %v", node.Name, ctrl.nodeCount)
+	klog.V(5).Infof("Added node %v - Total node count: %v", node.Name, ctrl.nodeCount)
 	return
 }
 
@@ -324,7 +324,7 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 
 	// Get Pods already scheduled: Deployment name, replicaID, hostname
 	scheduledList := networkAwareUtil.GetScheduledList(pods)
-	klog.V(6).Info("scheduledList: ", scheduledList)
+	klog.V(5).Info("scheduledList: ", scheduledList)
 
 	// Check if pods already available
 	if scheduledList == nil {
@@ -348,7 +348,7 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 			for _, d := range dependencyList { // For each pod dependency
 				if podAllocated.Selector == d.Workload.Selector { // If the pod allocated is an established dependency
 					if podAllocated.Hostname == pod.Spec.NodeName { // If the pod's hostname is the same
-						klog.Info("[Pod added] Same Hostname do nothing for this dependency... ")
+						klog.V(5).Info("[Pod added] Same Hostname do nothing for this dependency... ")
 					} else { // If Nodes are not the same
 						// Get NodeInfo from pod Hostname
 						podHostname, err := ctrl.nodeLister.Get(podAllocated.Hostname)
@@ -361,7 +361,7 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 						zonePodHostname := networkAwareUtil.GetNodeZone(podHostname)
 
 						if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
-							klog.Info("[Pod added] Null region/zone do nothing for this dependency... ")
+							klog.V(5).Info("[Pod added] Null region/zone do nothing for this dependency... ")
 						} else if region == regionPodHostname { // If Nodes belong to the same region
 							if zone == zonePodHostname { // If Nodes belong to the same zone
 								klog.Info("[Pod added] Same Zone do nothing for this dependency... ")
@@ -376,7 +376,7 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 										Origin:      zone,
 										Destination: zonePodHostname}] = value
 								} else {
-									klog.Infof("[zones] Bandwidth allocatable not found in map... add minBandwidth")
+									klog.V(5).Infof("[zones] Bandwidth allocatable not found in map... add minBandwidth")
 									capacity := *resource.NewQuantity(0, resource.DecimalSI)
 									capacity.Add(d.MinBandwidth)
 
@@ -396,7 +396,7 @@ func (ctrl *NetworkTopologyController) podAdded(obj interface{}) {
 									Origin:      region,
 									Destination: regionPodHostname}] = value
 							} else {
-								klog.Infof("[regions] Bandwidth allocatable not found in map... add minBandwidth")
+								klog.V(5).Infof("[regions] Bandwidth allocatable not found in map... add minBandwidth")
 								capacity := *resource.NewQuantity(0, resource.DecimalSI)
 								capacity.Add(d.MinBandwidth)
 
@@ -467,7 +467,7 @@ func (ctrl *NetworkTopologyController) podDeleted(obj interface{}) {
 
 		// Get Pods already scheduled: Deployment name, replicaID, hostname
 		scheduledList := networkAwareUtil.GetScheduledList(pods)
-		klog.V(6).Info("scheduledList: ", scheduledList)
+		klog.V(5).Info("scheduledList: ", scheduledList)
 
 		// Check if pods already available
 		if scheduledList == nil {
@@ -491,7 +491,7 @@ func (ctrl *NetworkTopologyController) podDeleted(obj interface{}) {
 				for _, d := range dependencyList { // For each pod dependency
 					if podAllocated.Selector == d.Workload.Selector { // If the pod allocated is an established dependency
 						if podAllocated.Hostname == pod.Spec.NodeName { // If the pod's hostname is the same
-							klog.Info("[Pod deleted] Same hostname do nothing for this dependency... ")
+							klog.V(5).Info("[Pod deleted] Same hostname do nothing for this dependency... ")
 						} else { // If Nodes are not the same
 							// Get NodeInfo from pod Hostname
 							podHostname, err := ctrl.nodeLister.Get(podAllocated.Hostname)
@@ -504,10 +504,10 @@ func (ctrl *NetworkTopologyController) podDeleted(obj interface{}) {
 							zonePodHostname := networkAwareUtil.GetNodeZone(podHostname)
 
 							if regionPodHostname == "" && zonePodHostname == "" { // Node has no zone and region defined
-								klog.Info("[Pod deleted] Null region/zone do nothing for this dependency... ")
+								klog.V(5).Info("[Pod deleted] Null region/zone do nothing for this dependency... ")
 							} else if region == regionPodHostname { // If Nodes belong to the same region
 								if zone == zonePodHostname { // If Nodes belong to the same zone
-									klog.Info("[Pod deleted] Same Zone do nothing for this dependency... ")
+									klog.V(5).Info("[Pod deleted] Same Zone do nothing for this dependency... ")
 								} else { // belong to a different zone
 									value, ok := ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Retrieve the current allocatable bandwidth from the map (origin: zone, destination: pod zoneHostname)
 										Origin:      zone,
@@ -519,7 +519,7 @@ func (ctrl *NetworkTopologyController) podDeleted(obj interface{}) {
 											Origin:      zone,
 											Destination: zonePodHostname}] = value
 									} else {
-										klog.Infof("[zones] Bandwidth allocatable not found in map... add 0")
+										klog.V(5).Infof("[zones] Bandwidth allocatable not found in map... add 0")
 										capacity := *resource.NewQuantity(0, resource.DecimalSI)
 
 										ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
@@ -538,7 +538,7 @@ func (ctrl *NetworkTopologyController) podDeleted(obj interface{}) {
 										Origin:      region,
 										Destination: regionPodHostname}] = value
 								} else {
-									klog.Infof("[regions] Bandwidth allocatable not found in map... add 0")
+									klog.V(5).Infof("[regions] Bandwidth allocatable not found in map... add 0")
 									capacity := *resource.NewQuantity(0, resource.DecimalSI)
 
 									ctrl.BandwidthAllocatable[networkAwareUtil.CostKey{ // Add the updated bandwidth to the map
@@ -642,7 +642,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 	ctrl.lock.Lock()
 
 	if ntCopy.Status.WeightCalculationTime.IsZero() {
-		klog.InfoS("Initial Calculation of Weight List...")
+		klog.V(5).InfoS("Initial Calculation of Weight List...")
 
 		var manualCosts v1alpha1.TopologyList
 		var manualRegionCosts v1alpha1.OriginList
@@ -669,7 +669,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 			return err
 		}
 
-		klog.Infof("Graph: %v", ctrl.nodeGraph)
+		klog.V(5).Infof("Graph: %v", ctrl.nodeGraph)
 
 		weights := v1alpha1.WeightList{}
 
@@ -688,7 +688,7 @@ func (ctrl *NetworkTopologyController) syncHandler(key string) error {
 		ntCopy.Status.WeightCalculationTime = metav1.Time{Time: time.Now()}
 
 	} else if time.Now().Sub(ntCopy.Status.WeightCalculationTime.Time) > 5*time.Minute {
-		klog.InfoS("Recalculation of Weight List... Every 5 min...")
+		klog.V(5).InfoS("Recalculation of Weight List... Every 5 min...")
 
 		var manualCosts v1alpha1.TopologyList
 		var manualRegionCosts v1alpha1.OriginList
@@ -776,13 +776,13 @@ func updateGraph(ctrl *NetworkTopologyController, nodes []*v1.Node, configmap *v
 				r2 := networkAwareUtil.GetNodeRegion(n2)
 				z2 := networkAwareUtil.GetNodeZone(n2)
 
-				klog.Infof("N1: %v - N2: %v - Region1: %v - Region2: %v - Zone1: %v - Zone2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
+				klog.V(5).Infof("N1: %v - N2: %v - Region1: %v - Region2: %v - Zone1: %v - Zone2: %v", n1.Name, n2.Name, r1, r2, z1, z2)
 
 				// get cost from configmap
 				key := util.GetConfigmapCostQuery(n1.Name, n2.Name)
 
-				klog.Infof("Key: %v", key)
-				klog.Infof("configmap.Data: %v", configmap.Data)
+				klog.V(5).Infof("Key: %v", key)
+				klog.V(5).Infof("configmap.Data: %v", configmap.Data)
 
 				cost, err := strconv.Atoi(configmap.Data[key])
 				if err != nil {
@@ -850,7 +850,7 @@ func getRegionList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualRegi
 		}
 	}
 
-	klog.Infof("[getRegionList] Regions %v ", regions)
+	klog.V(5).Infof("[getRegionList] Regions %v ", regions)
 
 	for _, r1 := range regions {
 		// init vars
@@ -867,7 +867,7 @@ func getRegionList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualRegi
 
 				originCosts := networkAwareUtil.FindOriginCosts(manualRegionCosts, r1)
 
-				klog.Infof("[getRegionList] originCosts: %v", originCosts)
+				klog.V(5).Infof("[getRegionList] originCosts: %v", originCosts)
 
 				bandwidthCapacity := *resource.NewScaledQuantity(1, resource.Giga)
 
@@ -882,7 +882,7 @@ func getRegionList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualRegi
 					}
 				}
 
-				klog.Infof("[getRegionList] Bandwidth Capacity between %v and %v: %v", r1, r2, bandwidthCapacity)
+				klog.V(5).Infof("[getRegionList] Bandwidth Capacity between %v and %v: %v", r1, r2, bandwidthCapacity)
 
 				if ok {
 					info := v1alpha1.CostInfo{
@@ -891,7 +891,7 @@ func getRegionList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualRegi
 						BandwidthAllocated: allocatable,
 						NetworkCost:        int64(cost),
 					}
-					klog.Infof("[getRegionList] OK: Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
+					klog.V(5).Infof("[getRegionList] OK: Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
 					costInfo = append(costInfo, info)
 				} else {
 					info := v1alpha1.CostInfo{
@@ -900,7 +900,7 @@ func getRegionList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualRegi
 						BandwidthAllocated: *resource.NewQuantity(0, resource.DecimalSI), // consider as zero
 						NetworkCost:        int64(cost),
 					}
-					klog.Infof("[getRegionList] Bandwidth allocatable Not found: Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
+					klog.V(5).Infof("[getRegionList] Bandwidth allocatable Not found: Origin %v - Destination %v - Cost: %v - Allocatable: %v", r1, r2, info.NetworkCost, info.BandwidthAllocated)
 					costInfo = append(costInfo, info)
 				}
 			}
@@ -932,7 +932,7 @@ func getZoneList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualZoneCo
 		}
 	}
 
-	klog.Infof("[getZoneList] Zones %v ", zones)
+	klog.V(5).Infof("[getZoneList] Zones %v ", zones)
 
 	for _, z1 := range zones {
 		// init vars
@@ -955,7 +955,7 @@ func getZoneList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualZoneCo
 
 					originCosts := networkAwareUtil.FindOriginCosts(manualZoneCosts, z1)
 
-					klog.Infof("[getZoneList] originCosts: %v", originCosts)
+					klog.V(5).Infof("[getZoneList] originCosts: %v", originCosts)
 
 					bandwidthCapacity := *resource.NewScaledQuantity(1, resource.Giga)
 
@@ -970,7 +970,7 @@ func getZoneList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualZoneCo
 						}
 					}
 
-					klog.Infof("[getZoneList] Bandwidth Capacity between %v and %v: %v", z1, z2, bandwidthCapacity)
+					klog.V(5).Infof("[getZoneList] Bandwidth Capacity between %v and %v: %v", z1, z2, bandwidthCapacity)
 
 					if ok {
 						info := v1alpha1.CostInfo{
@@ -980,7 +980,7 @@ func getZoneList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualZoneCo
 							NetworkCost:        int64(cost),
 						}
 
-						klog.Infof("[getZoneList] Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
+						klog.V(5).Infof("[getZoneList] Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
 						costInfo = append(costInfo, info)
 					} else {
 						info := v1alpha1.CostInfo{
@@ -990,7 +990,7 @@ func getZoneList(ctrl *NetworkTopologyController, nodes []*v1.Node, manualZoneCo
 							NetworkCost:        int64(cost),
 						}
 
-						klog.Infof("[getZoneList] Bandwidth Allocatable not found: Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
+						klog.V(5).Infof("[getZoneList] Bandwidth Allocatable not found: Origin %v - Destination %v - Cost: %v - Allocatable: %v", z1, z2, info.NetworkCost, info.BandwidthAllocated)
 						costInfo = append(costInfo, info)
 					}
 				}

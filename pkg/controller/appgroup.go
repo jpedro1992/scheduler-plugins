@@ -166,7 +166,7 @@ func (ctrl *AppGroupController) agAdded(obj interface{}) {
 		return
 	}
 
-	klog.InfoS("Enqueue AppGroup ", "app group", key)
+	klog.V(5).InfoS("Enqueue AppGroup ", "app group", key)
 	ctrl.agQueue.Add(key)
 }
 
@@ -358,7 +358,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 	klog.Info("RunningWorkloads: ", numWorkloadsRunning)
 
 	if agCopy.Status.TopologyCalculationTime.IsZero() {
-		klog.InfoS("Initial Calculation of Topology order...")
+		klog.V(5).InfoS("Initial Calculation of Topology order...")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Workloads, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
@@ -367,7 +367,7 @@ func (ctrl *AppGroupController) syncHandler(key string) error {
 		agCopy.Status.TopologyCalculationTime = metav1.Time{Time: time.Now()}
 
 	} else if time.Now().Sub(ag.Status.TopologyCalculationTime.Time) > 24*time.Hour {
-		klog.InfoS("Recalculation of Topology Order... Every 24 hours...")
+		klog.V(5).InfoS("Recalculation of Topology Order... Every 24 hours...")
 		agCopy.Status.TopologyOrder, err = calculateTopologyOrder(agCopy, agCopy.Spec.TopologySortingAlgorithm, agCopy.Spec.Workloads, err)
 		if err != nil {
 			klog.InfoS("Error Calculating Topology order, application reflects a DAG...", "appGroup", key)
@@ -413,7 +413,7 @@ func calculateTopologyOrder(agCopy *v1alpha1.AppGroup, algorithm string, workloa
 		}
 	}
 
-	klog.Info("Service Dependency Tree: ", tree)
+	klog.V(5).Info("Service Dependency Tree: ", tree)
 
 	// Calculate order based on the specified algorithm
 	switch algorithm {
@@ -490,10 +490,10 @@ func calculateTopologyOrder(agCopy *v1alpha1.AppGroup, algorithm string, workloa
 	}
 
 	// Sort TopologyList by Selector
-	klog.Infof("Sort Topology List by workload name... ")
+	klog.V(5).Infof("Sort Topology List by workload name... ")
 	sort.Sort(util.ByWorkloadSelector(topologyList))
 
-	klog.Info("topologyList: ", topologyList)
+	klog.V(5).Info("topologyList: ", topologyList)
 	return topologyList, nil
 }
 
@@ -511,9 +511,9 @@ func defaultTopologyOrder(workloadList v1alpha1.AppGroupWorkloadList) v1alpha1.A
 	}
 
 	// Sort TopologyList by Selector
-	klog.Infof("Sort Topology List by workload name... ")
+	klog.V(5).Infof("Sort Topology List by workload name... ")
 	sort.Sort(util.ByWorkloadSelector(topologyList))
 
-	klog.Info("topologyList: ", topologyList)
+	klog.V(5).Info("topologyList: ", topologyList)
 	return topologyList
 }
