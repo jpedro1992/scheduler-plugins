@@ -240,3 +240,15 @@ type NetworkOverheadArgs struct {
 	// The NetworkTopology CRD name
 	NetworkTopologyName string
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type AppClassArgs struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// Namespaces to be considered by AppClass plugin
+	Namespaces []string `json:"namespaces,omitempty"`
+
+	// Name of the AppClass CR (Default: app-class)
+	AppClassName string `json:"appClassName,omitempty"`
+}

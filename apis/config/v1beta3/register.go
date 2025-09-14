@@ -45,6 +45,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&PreemptionTolerationArgs{},
 		&TopologicalSortArgs{},
 		&NetworkOverheadArgs{},
+		&AppClassArgs{},
 	)
 	return nil
 }

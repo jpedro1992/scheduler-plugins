@@ -19,6 +19,8 @@ package networkoverhead
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
+	klog "k8s.io/klog/v2"
 	"math"
 	"sort"
 
@@ -28,7 +30,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,7 +50,7 @@ const (
 	Name = "NetworkOverhead"
 
 	// MaxCost : MaxCost used in the NetworkTopology for costs between origins and destinations
-	MaxCost = 100
+	MaxCost = 10000
 
 	// SameHostname : If pods belong to the same host, then consider cost as 0
 	SameHostname = 0
@@ -59,6 +60,12 @@ const (
 
 	// preFilterStateKey is the key in CycleState to NetworkOverhead pre-computed data.
 	preFilterStateKey = "PreFilter" + Name
+
+	// Inter : Inter statistics key.
+	Inter = "Inter"
+
+	// Intra : Intra statistics key.
+	Intra = "Intra"
 )
 
 var scheme = runtime.NewScheme()
@@ -112,6 +119,18 @@ type PreFilterState struct {
 
 	// node map for costs
 	finalCostMap map[string]int64
+
+	// AppGroupStatistics AvgBandwidth
+	appGroupStatisticsAvgBandwidth resource.Quantity
+
+	// AppGroupStatistics AvgCost
+	appGroupStatisticsAvgCost int64
+
+	// WorkloadStatistics
+	workloadStatistics agv1alpha1.AppGroupStatistics
+
+	// statisticsMap for inter- and intra- statistics
+	statisticsMap map[networkawareutil.StatisticsKey]ntv1alpha1.NetworkTopologyStatistics
 }
 
 // Clone the preFilter state.
@@ -172,6 +191,7 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 // 4. Update cost map of all nodes
 // 5. Get number of satisfied and violated dependencies
 // 6. Get final cost of the given node to be used in the score plugin
+// 7. Get AppGroup and Workload Statistics to be used in filtering and scoring
 func (no *NetworkOverhead) PreFilter(ctx context.Context, state *framework.CycleState, pod *corev1.Pod) (*framework.PreFilterResult, *framework.Status) {
 	// Init PreFilter State
 	preFilterState := &PreFilterState{
@@ -198,10 +218,12 @@ func (no *NetworkOverhead) PreFilter(ctx context.Context, state *framework.Cycle
 
 	// Get Dependencies of the given pod
 	dependencyList := networkawareutil.GetDependencyList(pod, appGroup)
+	score := false
 
 	// If the pod has no dependencies, return
 	if dependencyList == nil {
-		return nil, framework.NewStatus(framework.Success, "Pod has no dependencies, return")
+		score = true
+		//	return nil, framework.NewStatus(framework.Success, "Pod has no dependencies, return")
 	}
 
 	// Get pods from lister
@@ -213,15 +235,21 @@ func (no *NetworkOverhead) PreFilter(ctx context.Context, state *framework.Cycle
 
 	// Return if pods are not yet allocated for the AppGroup...
 	if len(pods) == 0 {
-		return nil, framework.NewStatus(framework.Success, "No pods yet allocated, return")
+		score = true
+		//	return nil, framework.NewStatus(framework.Success, "No pods yet allocated, return")
 	}
 
 	// Pods already scheduled: Get Scheduled List (Deployment name, replicaID, hostname)
-	scheduledList := networkawareutil.GetScheduledList(pods)
+	var scheduledList networkawareutil.ScheduledList
+	if len(pods) != 0 {
+		scheduledList = networkawareutil.GetScheduledList(pods)
+	}
+
 	// Check if scheduledList is empty...
 	if len(scheduledList) == 0 {
-		klog.ErrorS(nil, "Scheduled list is empty, return")
-		return nil, framework.NewStatus(framework.Success, "Scheduled list is empty, return")
+		score = true
+		//	klog.ErrorS(nil, "Scheduled list is empty, return")
+		//	return nil, framework.NewStatus(framework.Success, "Scheduled list is empty, return")
 	}
 
 	// Get all nodes
@@ -235,62 +263,82 @@ func (no *NetworkOverhead) PreFilter(ctx context.Context, state *framework.Cycle
 	satisfiedMap := make(map[string]int64)
 	violatedMap := make(map[string]int64)
 	finalCostMap := make(map[string]int64)
+	statisticsMap := make(map[networkawareutil.StatisticsKey]ntv1alpha1.NetworkTopologyStatistics)
 
 	// For each node:
 	// 1 - Get region and zone labels
 	// 2 - Calculate satisfied and violated number of dependencies
 	// 3 - Calculate the final cost of the node to be used by the scoring plugin
 	for _, nodeInfo := range nodeList {
-		// retrieve region and zone labels
+		// retrieve region, zone and segment labels
 		region := networkawareutil.GetNodeRegion(nodeInfo.Node())
 		zone := networkawareutil.GetNodeZone(nodeInfo.Node())
+		segment := networkawareutil.GetNodeSegment(nodeInfo.Node())
 		klog.V(6).InfoS("Node info",
 			"name", nodeInfo.Node().Name,
 			"region", region,
-			"zone", zone)
+			"zone", zone,
+			"segment", segment)
 
 		// Create map for cost / destinations. Search for requirements faster...
 		costMap := make(map[networkawareutil.CostKey]int64)
 
 		// Populate cost map for the given node
-		no.populateCostMap(costMap, networkTopology, region, zone)
-		klog.V(6).InfoS("Map", "costMap", costMap)
+		no.populateCostMap(costMap, networkTopology, region, zone, segment)
+		// klog.V(6).InfoS("Map", "costMap", costMap)
 
 		// Update nodeCostMap
 		nodeCostMap[nodeInfo.Node().Name] = costMap
 
+		// Populate statistics map for the given node
+		no.populateStatisticsMap(statisticsMap, networkTopology, region, zone, segment)
+		// klog.V(6).InfoS("Map", "statisticsMap", statisticsMap)
+
 		// Get Satisfied and Violated number of dependencies
-		satisfied, violated, ok := checkMaxNetworkCostRequirements(scheduledList, dependencyList, nodeInfo, region, zone, costMap, no)
-		if ok != nil {
-			return nil, framework.NewStatus(framework.Error, fmt.Sprintf("pod hostname not found: %v", ok))
-		}
+		if len(scheduledList) != 0 && dependencyList != nil {
+			satisfied, violated, ok := checkMaxNetworkCostRequirements(scheduledList, dependencyList, nodeInfo, region, zone, costMap, no)
+			if ok != nil {
+				return nil, framework.NewStatus(framework.Error, fmt.Sprintf("pod hostname not found: %v", ok))
+			}
 
-		// Update Satisfied and Violated maps
-		satisfiedMap[nodeInfo.Node().Name] = satisfied
-		violatedMap[nodeInfo.Node().Name] = violated
-		klog.V(6).InfoS("Number of dependencies", "satisfied", satisfied, "violated", violated)
+			// Update Satisfied and Violated maps
+			satisfiedMap[nodeInfo.Node().Name] = satisfied
+			violatedMap[nodeInfo.Node().Name] = violated
+			klog.V(6).InfoS("Number of dependencies", "satisfied", satisfied, "violated", violated)
 
-		// Get accumulated cost based on pod dependencies
-		cost, ok := no.getAccumulatedCost(scheduledList, dependencyList, nodeInfo.Node().Name, region, zone, costMap)
-		if ok != nil {
-			return nil, framework.NewStatus(framework.Error, fmt.Sprintf("getting pod hostname from Snapshot: %v", ok))
+			// Get accumulated cost based on pod dependencies
+			cost, ok := no.getAccumulatedCost(scheduledList, dependencyList, nodeInfo.Node().Name, region, zone, costMap)
+			if ok != nil {
+				return nil, framework.NewStatus(framework.Error, fmt.Sprintf("getting pod hostname from Snapshot: %v", ok))
+			}
+			klog.V(6).InfoS("Node final cost", "cost", cost)
+			finalCostMap[nodeInfo.Node().Name] = cost
 		}
-		klog.V(6).InfoS("Node final cost", "cost", cost)
-		finalCostMap[nodeInfo.Node().Name] = cost
 	}
+
+	appGroupStatisticsAvgBandwidth := appGroup.Status.AppGroupStatistics.AvgBandwidth
+	appGroupStatisticsAvgCost := appGroup.Status.AppGroupStatistics.AvgCost
+	// workloadStatisticsAvgCost := appGroup.Status.
+
+	// Binary search to find Workload statistics of the given Workload
+	workloadStatistics := networkawareutil.FindWorkloadStatistics(appGroup.Status.TopologyOrder, networkawareutil.GetPodAppGroupSelector(pod))
 
 	// Update PreFilter State
 	preFilterState = &PreFilterState{
-		scoreEqually:    false,
-		agName:          agName,
-		appGroup:        appGroup,
-		networkTopology: networkTopology,
-		dependencyList:  dependencyList,
-		scheduledList:   scheduledList,
-		nodeCostMap:     nodeCostMap,
-		satisfiedMap:    satisfiedMap,
-		violatedMap:     violatedMap,
-		finalCostMap:    finalCostMap,
+		scoreEqually:                   score,
+		agName:                         agName,
+		appGroup:                       appGroup,
+		networkTopology:                networkTopology,
+		dependencyList:                 dependencyList,
+		scheduledList:                  scheduledList,
+		nodeCostMap:                    nodeCostMap,
+		satisfiedMap:                   satisfiedMap,
+		violatedMap:                    violatedMap,
+		finalCostMap:                   finalCostMap,
+		appGroupStatisticsAvgBandwidth: appGroupStatisticsAvgBandwidth,
+		appGroupStatisticsAvgCost:      appGroupStatisticsAvgCost,
+		workloadStatistics:             workloadStatistics,
+		statisticsMap:                  statisticsMap,
 	}
 
 	state.Write(preFilterStateKey, preFilterState)
@@ -339,21 +387,110 @@ func (no *NetworkOverhead) Filter(ctx context.Context,
 	}
 
 	// If scoreEqually, return nil
-	if preFilterState.scoreEqually {
-		klog.V(6).InfoS("Score all nodes equally, return")
-		return nil
-	}
+	//if preFilterState.scoreEqually {
+	//	klog.V(6).InfoS("Score all nodes equally, return")
+	//	return nil
+	//}
+
+	// Check if scheduledList is empty...
+	//if len(preFilterState.scheduledList) == 0 {
+	//	klog.V(6).InfoS("Pod does not have dependencies based on AppGroup, scheduled list is empty, return")
+	//	return nil
+	//}
 
 	// Get satisfied and violated number of dependencies
-	satisfied := preFilterState.satisfiedMap[nodeInfo.Node().Name]
-	violated := preFilterState.violatedMap[nodeInfo.Node().Name]
-	klog.V(6).InfoS("Number of dependencies:", "satisfied", satisfied, "violated", violated)
+	if len(preFilterState.scheduledList) != 0 {
+		klog.V(6).InfoS("Checking the number of violated dependencies... ")
+		satisfied := preFilterState.satisfiedMap[nodeInfo.Node().Name]
+		violated := preFilterState.violatedMap[nodeInfo.Node().Name]
+		klog.V(6).InfoS("Number of dependencies:", "satisfied", satisfied, "violated", violated)
 
-	// The pod is filtered out if the number of violated dependencies is higher than the satisfied ones
-	if violated > satisfied {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("Node %v does not meet several network requirements from Workload dependencies: Satisfied: %v Violated: %v", nodeInfo.Node().Name, satisfied, violated))
+		// The pod is filtered out if the number of violated dependencies is higher than the satisfied ones
+		if violated > satisfied {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("Node %v does not meet several network requirements from Workload dependencies: Satisfied: %v Violated: %v", nodeInfo.Node().Name, satisfied, violated))
+		}
 	}
+
+	// Check AppGroup Statistics
+	avgBandwidth := preFilterState.appGroupStatisticsAvgBandwidth
+	avgCost := preFilterState.appGroupStatisticsAvgCost
+	zone := networkawareutil.GetNodeZone(nodeInfo.Node())
+	segment := networkawareutil.GetNodeSegment(nodeInfo.Node())
+
+	intraZoneStatistics := preFilterState.statisticsMap[networkawareutil.StatisticsKey{
+		Origin:         zone,
+		TypeStatistics: Intra,
+	}]
+
+	intraSegmentStatistics := preFilterState.statisticsMap[networkawareutil.StatisticsKey{
+		Origin:         segment,
+		TypeStatistics: Intra,
+	}]
+
+	workloadStatistics := preFilterState.workloadStatistics
+
+	klog.V(6).InfoS("Checking Appgroup and Workload Statistics... ")
+	klog.V(6).InfoS("AppGroup requirements:", "avgBandwidth", avgBandwidth, "avgCost", avgCost)
+	klog.V(6).InfoS("Workload requirements:", "avgBandwidth", workloadStatistics.AvgBandwidth, "avgCost", workloadStatistics.AvgCost)
+
+	klog.V(6).InfoS("Zone IntraStatistics:", "zone", zone, "minBandwidth", intraZoneStatistics.MinBandwidth, "avgCost", intraZoneStatistics.AvgCost)
+	klog.V(6).InfoS("Segment IntraStatistics:", "segment", segment, "minBandwidth", intraSegmentStatistics.MinBandwidth, "avgCost", intraSegmentStatistics.AvgCost)
+
+	// Zone Filtering functions
+	// The pod is filtered out if AppGroup min bandwidth is higher than min bandwidth of zone
+	if avgBandwidth.Cmp(intraZoneStatistics.MinBandwidth) == 1 {
+		return framework.NewStatus(framework.Unschedulable,
+			fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Appgroup bandwidth requirements. Zone: %v workload: %v.", nodeInfo.Node().Name, zone, intraZoneStatistics.MinBandwidth, avgBandwidth))
+	}
+
+	// The pod is filtered out if AppGroup avg cost is lower than avgCost of zone
+	if avgCost <= intraZoneStatistics.AvgCost {
+		return framework.NewStatus(framework.Unschedulable,
+			fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Appgroup cost requirements.", nodeInfo.Node().Name, zone))
+	}
+
+	// The pod is filtered out if Workload avg bandwidth is higher than min bandwidth of zone
+	if workloadStatistics.AvgBandwidth.Cmp(intraZoneStatistics.MinBandwidth) == 1 {
+		return framework.NewStatus(framework.Unschedulable,
+			fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Workload bandwidth requirements.", nodeInfo.Node().Name, zone))
+	}
+
+	// The pod is filtered out if AppGroup avg cost is lower than avgCost of zone
+	if intraZoneStatistics.AvgCost != 0 && workloadStatistics.AvgCost != 0 {
+		if workloadStatistics.AvgCost <= intraZoneStatistics.AvgCost {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Workload cost requirements. Zone: %v workload: %v.", nodeInfo.Node().Name, zone, intraZoneStatistics.AvgCost, workloadStatistics.AvgCost))
+		}
+	}
+
+	// Segment Filtering functions
+	// The pod is filtered out if AppGroup min bandwidth is higher than min bandwidth of segment
+	if avgBandwidth.Cmp(intraSegmentStatistics.MinBandwidth) == 1 {
+		return framework.NewStatus(framework.Unschedulable,
+			fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Appgroup bandwidth requirements. Segment: %v workload: %v.", nodeInfo.Node().Name, segment, intraSegmentStatistics.MinBandwidth, avgBandwidth))
+	}
+
+	// The pod is filtered out if AppGroup avg cost is lower than avgCost of segment
+	if avgCost <= intraSegmentStatistics.AvgCost {
+		return framework.NewStatus(framework.Unschedulable,
+			fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Appgroup cost requirements.", nodeInfo.Node().Name, segment))
+	}
+
+	// The pod is filtered out if Workload avg bandwidth is higher than min bandwidth of zone
+	if workloadStatistics.AvgBandwidth.Cmp(intraSegmentStatistics.MinBandwidth) == 1 {
+		return framework.NewStatus(framework.Unschedulable,
+			fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Workload bandwidth requirements.", nodeInfo.Node().Name, segment))
+	}
+
+	// The pod is filtered out if AppGroup avg cost is lower than avgCost of segment
+	if intraSegmentStatistics.AvgCost != 0 && workloadStatistics.AvgCost != 0 {
+		if workloadStatistics.AvgCost <= intraSegmentStatistics.AvgCost {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Workload cost requirements. Segment: %v workload: %v.", nodeInfo.Node().Name, segment, intraSegmentStatistics.AvgCost, workloadStatistics.AvgCost))
+		}
+	}
+
 	return nil
 }
 
@@ -445,7 +582,8 @@ func (no *NetworkOverhead) populateCostMap(
 	costMap map[networkawareutil.CostKey]int64,
 	networkTopology *ntv1alpha1.NetworkTopology,
 	region string,
-	zone string) {
+	zone string,
+	segment string) {
 	for _, w := range networkTopology.Spec.Weights { // Check the weights List
 		if w.Name != no.weightsName { // If it is not the Preferred algorithm, continue
 			continue
@@ -488,6 +626,124 @@ func (no *NetworkOverhead) populateCostMap(
 					Origin:      zone,
 					Destination: c.Destination}] = c.NetworkCost
 			}
+		}
+		if segment != "" { // Add Segment Costs
+			// Binary search through CostList: find the Topology Key for zone
+			topologyList := networkawareutil.FindTopologyKey(w.TopologyList, ntv1alpha1.NetworkTopologySegment)
+
+			if no.weightsName != ntv1alpha1.NetworkTopologyNetperfCosts {
+				// Sort Costs by origin, might not be sorted since were manually defined
+				sort.Sort(networkawareutil.ByOrigin(topologyList))
+			}
+
+			// Binary search through TopologyList: find the costs for the given Region
+			costs := networkawareutil.FindOriginCosts(topologyList, segment)
+
+			// Add Segment Costs
+			for _, c := range costs {
+				costMap[networkawareutil.CostKey{ // Add the cost to the map
+					Origin:      segment,
+					Destination: c.Destination}] = c.NetworkCost
+			}
+		}
+	}
+}
+
+// populateStatisticsMap : Populates statisticsMap based on the node being filtered/scored
+func (no *NetworkOverhead) populateStatisticsMap(
+	statisticsMap map[networkawareutil.StatisticsKey]ntv1alpha1.NetworkTopologyStatistics,
+	networkTopology *ntv1alpha1.NetworkTopology,
+	region string,
+	zone string,
+	segment string) {
+	for _, w := range networkTopology.Spec.Weights { // Check the weights List
+		if w.Name != no.weightsName { // If it is not the Preferred algorithm, continue
+			continue
+		}
+		klog.V(6).InfoS("weights TopologyList: ", "list", w.TopologyList)
+		if region != "" { // Add Region Statistics
+			// Binary search through CostList: find the Topology Key for region
+			topologyList := networkawareutil.FindTopologyKey(w.TopologyList, ntv1alpha1.NetworkTopologyRegion)
+			klog.V(6).InfoS("Region topologyList: ", "region", region, "list", topologyList)
+
+			if no.weightsName != ntv1alpha1.NetworkTopologyNetperfCosts {
+				// Sort Costs by origin, might not be sorted since were manually defined
+				sort.Sort(networkawareutil.ByOrigin(topologyList))
+			}
+
+			// Binary search through TopologyList: find inter and intra statistics for the given Region
+			intraStatistics := networkawareutil.FindOriginIntraStatistics(topologyList, region)
+			interStatistics := networkawareutil.FindOriginInterStatistics(topologyList, region)
+
+			klog.V(6).InfoS("Region intraStatistics: ", "list", intraStatistics)
+			klog.V(6).InfoS("Region interStatistics: ", "list", interStatistics)
+
+			// Add Region Statistics
+			statisticsMap[networkawareutil.StatisticsKey{ // Add the intra statistics to the map
+				Origin:         region,
+				TypeStatistics: Intra,
+			}] = intraStatistics
+
+			statisticsMap[networkawareutil.StatisticsKey{ // Add the inter statistics to the map
+				Origin:         region,
+				TypeStatistics: Inter,
+			}] = interStatistics
+		}
+		if zone != "" { // Add Zone Statistics
+			// Binary search through CostList: find the Topology Key for zone
+			topologyList := networkawareutil.FindTopologyKey(w.TopologyList, ntv1alpha1.NetworkTopologyZone)
+			klog.V(6).InfoS("Zone topologyList: ", "zone", zone, "list", topologyList)
+
+			if no.weightsName != ntv1alpha1.NetworkTopologyNetperfCosts {
+				// Sort Costs by origin, might not be sorted since were manually defined
+				sort.Sort(networkawareutil.ByOrigin(topologyList))
+			}
+
+			// Binary search through TopologyList: find inter and intra statistics for the given Region
+			intraStatistics := networkawareutil.FindOriginIntraStatistics(topologyList, zone)
+			interStatistics := networkawareutil.FindOriginInterStatistics(topologyList, zone)
+
+			klog.V(6).InfoS("Zone intraStatistics: ", "list", intraStatistics)
+			klog.V(6).InfoS("Zone interStatistics: ", "list", interStatistics)
+
+			// Add Region Statistics
+			statisticsMap[networkawareutil.StatisticsKey{ // Add the intra statistics to the map
+				Origin:         zone,
+				TypeStatistics: Intra,
+			}] = intraStatistics
+
+			statisticsMap[networkawareutil.StatisticsKey{ // Add the inter statistics to the map
+				Origin:         zone,
+				TypeStatistics: Inter,
+			}] = interStatistics
+		}
+		if segment != "" { // Add Segment Statistics
+			// Binary search through CostList: find the Topology Key for segment
+			topologyList := networkawareutil.FindTopologyKey(w.TopologyList, ntv1alpha1.NetworkTopologySegment)
+			klog.V(6).InfoS("Segment topologyList: ", "segment", segment, "list", topologyList)
+
+			if no.weightsName != ntv1alpha1.NetworkTopologyNetperfCosts {
+				// Sort Costs by origin, might not be sorted since were manually defined
+				sort.Sort(networkawareutil.ByOrigin(topologyList))
+			}
+
+			// Binary search through TopologyList: find inter and intra statistics for the given Region
+			intraStatistics := networkawareutil.FindOriginIntraStatistics(topologyList, segment)
+			interStatistics := networkawareutil.FindOriginInterStatistics(topologyList, segment)
+
+			klog.V(6).InfoS("Segment intraStatistics: ", "list", intraStatistics)
+			klog.V(6).InfoS("Segment interStatistics: ", "list", interStatistics)
+
+			// Add Segment Statistics
+			statisticsMap[networkawareutil.StatisticsKey{ // Add the intra statistics to the map
+				Origin:         segment,
+				TypeStatistics: Intra,
+			}] = intraStatistics
+
+			statisticsMap[networkawareutil.StatisticsKey{ // Add the inter statistics to the map
+				Origin:         segment,
+				TypeStatistics: Inter,
+			}] = interStatistics
 		}
 	}
 }

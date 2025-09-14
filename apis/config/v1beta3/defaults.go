@@ -94,6 +94,9 @@ var (
 	DefaultWeightsName = "UserDefined"
 	// DefaultNetworkTopologyName contains the networkTopology CR name to be used by networkAware plugins
 	DefaultNetworkTopologyName = "nt-default"
+
+	// DefaultAppClassName contains the appClass CR name to be used by appClass plugin
+	DefaultAppClassName = "app-class"
 )
 
 // SetDefaults_CoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -226,5 +229,16 @@ func SetDefaults_NetworkOverheadArgs(obj *NetworkOverheadArgs) {
 
 	if obj.NetworkTopologyName == nil {
 		obj.NetworkTopologyName = &DefaultNetworkTopologyName
+	}
+}
+
+// SetDefaults_AppClassArgs sets the default parameters for AppClassArgs plugin.
+func SetDefaults_AppClassArgs(obj *AppClassArgs) {
+	if len(obj.Namespaces) == 0 {
+		obj.Namespaces = []string{metav1.NamespaceDefault}
+	}
+
+	if obj.AppClassName == nil {
+		obj.AppClassName = &DefaultAppClassName
 	}
 }
