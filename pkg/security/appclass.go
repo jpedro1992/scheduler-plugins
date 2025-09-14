@@ -139,18 +139,28 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 	return ac, nil
 }
 
+// AppClass plugin
 // PreFilter performs the following operations:
 // 1. Check if Pod belongs to an AppGroup
 // 2. Get AppGroup and AppClass CR -> if not, score equally
-// 3. Get all deployed pods that have the AppGroup label -> if 0, score equally
+// 3. Get AppClass name of the given pod
+// 4. Get all deployed pods that have the AppGroup label -> if 0, score equally
+// 5. Get AppClass of all deployed pods - if status is empty, take spec. Otherwise, take status part.
+// 6. Based on scheduling list check satisfied (same class, affinity) and violated (different class, anti-affinity)
+// 7. Update satisfiedMap[nodeName] and violatedMap[nodeName]. It counts the number of satisfied and violated per node.
+// 8. Update PreFilter state
 
-// 1. Check appClass of pod based on appinfo field in appClass CR
-// 2. Check if pods are deployed for the same classes in the same node - affinityMap
-// 6. Check if pods are deployed for other classes - antiAffinityMAp
-// 7. FilterNode = True: if pods are deployed for antiAffinityMAp, filter out the node, break code
-// 8. For scoring, keep track of the number of pods in the node for affinityMap in numPodsAffinity
-// 9. Score plugin: score = 1 * numberAffinityPods
-// 10. Normalize scores (0 and 100) based on min and max of numberAffinityPods
+// Filter performs the following operations:
+// 1. Get PreFilterState
+// 2. Check number of violated for that particular node. If higher than 0, then filter node
+
+// Score performs the following operations:
+// 1. Get PreFilterState
+// 2. If scoreEqually=True, return minScore (Pod does not belong to AppGroup, or no pods are yet deployed.)
+// 3. Return satisfied value as score (e.g., 3 deployed pods with the same class, mean the node will have a +3 score.)
+
+// NormalizeScore performs the following operations:
+// 1. Normalize scores (between 0 and 100) based on min and max scores
 
 // Open Questions:
 // Q1: What to do if pods do not belong to any AppGroup? Just pass all nodes?
