@@ -28,7 +28,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"math"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,6 +56,7 @@ var scheme = runtime.NewScheme()
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(agv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(appclassv1alpha1.AddToScheme(scheme))
 }
 
 type AppClass struct {
@@ -105,7 +106,7 @@ func (ac *AppClass) Name() string {
 func getArgs(obj runtime.Object) (*pluginconfig.AppClassArgs, error) {
 	AppClassArgs, ok := obj.(*pluginconfig.AppClassArgs)
 	if !ok {
-		return nil, fmt.Errorf("want args to be of type NetworkOverhead, got %T", obj)
+		return nil, fmt.Errorf("want args to be of type AppClass, got %T", obj)
 	}
 
 	return AppClassArgs, nil
@@ -437,7 +438,11 @@ func (ac *AppClass) findAppClass(acName string) *appclassv1alpha1.AppClass {
 			Name:      acName,
 		}, appClass)
 		if err != nil {
-			klog.V(4).ErrorS(err, "Cannot get appClass from appClassNamespaceLister:")
+			klog.V(4).ErrorS(err, "Failed to get AppClass",
+				"namespace", namespace,
+				"name", acName,
+				"groupVersion", appclassv1alpha1.SchemeGroupVersion.String(),
+			)
 			continue
 		}
 		if appClass != nil && appClass.GetUID() != "" {
@@ -458,7 +463,11 @@ func (ac *AppClass) findAppGroup(agName string) *agv1alpha1.AppGroup {
 			Name:      agName,
 		}, appGroup)
 		if err != nil {
-			klog.V(4).ErrorS(err, "Cannot get AppGroup from AppGroupNamespaceLister:")
+			klog.V(4).ErrorS(err, "Failed to get AppGroup",
+				"namespace", namespace,
+				"name", agName,
+				"groupVersion", agv1alpha1.SchemeGroupVersion.String(),
+			)
 			continue
 		}
 		if appGroup != nil && appGroup.GetUID() != "" {

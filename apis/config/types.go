@@ -244,11 +244,11 @@ type NetworkOverheadArgs struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type AppClassArgs struct {
-	metav1.TypeMeta `json:",inline"`
+	metav1.TypeMeta
 
 	// Namespaces to be considered by AppClass plugin
-	Namespaces []string `json:"namespaces,omitempty"`
+	Namespaces []string
 
 	// Name of the AppClass CR (Default: app-class)
-	AppClassName string `json:"appClassName,omitempty"`
+	AppClassName string
 }

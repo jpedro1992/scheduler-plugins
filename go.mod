@@ -3,7 +3,7 @@ module sigs.k8s.io/scheduler-plugins
 go 1.20
 
 require (
-	github.com/diktyo-io/appclass-api v0.0.1
+	github.com/diktyo-io/appclass-api v0.0.4
 	github.com/diktyo-io/appgroup-api v1.0.4-alpha.0.20231114102851-45457440e8b2
 	github.com/diktyo-io/networktopology-api v1.0.5-alpha.0.20231120094806-a0e4db2a5bb1
 	github.com/dustin/go-humanize v1.0.1
