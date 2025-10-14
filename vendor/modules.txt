@@ -36,11 +36,15 @@ github.com/coreos/go-systemd/v22/journal
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/diktyo-io/appgroup-api v1.0.1-alpha
+# github.com/diktyo-io/appclass-api v0.0.4
+## explicit; go 1.16
+github.com/diktyo-io/appclass-api/pkg/apis/appclass
+github.com/diktyo-io/appclass-api/pkg/apis/appclass/v1alpha1
+# github.com/diktyo-io/appgroup-api v1.0.4-alpha.0.20231114102851-45457440e8b2
 ## explicit; go 1.16
 github.com/diktyo-io/appgroup-api/pkg/apis/appgroup
 github.com/diktyo-io/appgroup-api/pkg/apis/appgroup/v1alpha1
-# github.com/diktyo-io/networktopology-api v1.0.1-alpha
+# github.com/diktyo-io/networktopology-api v1.0.5-alpha.0.20231120094806-a0e4db2a5bb1
 ## explicit; go 1.16
 github.com/diktyo-io/networktopology-api/pkg/apis/networktopology
 github.com/diktyo-io/networktopology-api/pkg/apis/networktopology/v1alpha1

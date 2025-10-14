@@ -18,6 +18,7 @@ package appclass
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	appclassv1alpha1 "github.com/diktyo-io/appclass-api/pkg/apis/appclass/v1alpha1"
 	agv1alpha1 "github.com/diktyo-io/appgroup-api/pkg/apis/appgroup/v1alpha1"
@@ -49,6 +50,10 @@ const (
 
 	// preFilterStateKey is the key in CycleState to NetworkOverhead pre-computed data.
 	preFilterStateKey = "PreFilter" + Name
+
+	// MAX_ZONE_CLASSES and MAX_SEGMENT_CLASSES Defaults for maximum classes per zone and segment
+	defaultMaxZoneClasses    = 2
+	defaultMaxSegmentClasses = 1
 )
 
 var scheme = runtime.NewScheme()
@@ -61,10 +66,12 @@ func init() {
 
 type AppClass struct {
 	client.Client
-	podLister    corelisters.PodLister
-	handle       framework.Handle
-	namespaces   []string
-	appClassName string
+	podLister     corelisters.PodLister
+	handle        framework.Handle
+	namespaces    []string
+	appClassName  string
+	maxPerZone    int
+	maxPerSegment int
 }
 
 // PreFilterState computed at PreFilter and used at Filter and Score.
@@ -75,8 +82,11 @@ type PreFilterState struct {
 	// agName: corresponds to the name of the AppGroup of the pod
 	agName string
 
-	// appClass name of the pod
-	appClassName string
+	// workloadClassName of the pod
+	workloadClassName string
+
+	// globalClassName of the pod
+	globalClassName string
 
 	// AppGroup CR
 	appGroup *agv1alpha1.AppGroup
@@ -87,11 +97,23 @@ type PreFilterState struct {
 	// Pods already scheduled for a given AppGroup
 	scheduledList util.ScheduledList
 
-	// node map for counting affinity classes
-	satisfiedMap map[string]int64
+	// node map for counting affinity classes (workload)
+	workloadSatisfiedMap map[string]int64
 
-	// node map for counting anti-affinity classes
-	violatedMap map[string]int64
+	// node map for counting anti-affinity classes (workload)
+	workloadViolatedMap map[string]int64
+
+	// node map for counting affinity classes (global)
+	globalSatisfiedMap map[string]int64
+
+	// node map for counting anti-affinity classes (global)
+	globalViolatedMap map[string]int64
+
+	// zone map for counting classes in zones
+	zoneClassMap map[string]map[string]bool
+
+	// segment map for counting classes in zones
+	segmentClassMap map[string]map[string]bool
 }
 
 // Clone the preFilter state.
@@ -131,11 +153,13 @@ func New(obj runtime.Object, handle framework.Handle) (framework.Plugin, error) 
 	}
 
 	ac := &AppClass{
-		Client:       client,
-		podLister:    handle.SharedInformerFactory().Core().V1().Pods().Lister(),
-		handle:       handle,
-		namespaces:   args.Namespaces,
-		appClassName: args.AppClassName,
+		Client:        client,
+		podLister:     handle.SharedInformerFactory().Core().V1().Pods().Lister(),
+		handle:        handle,
+		namespaces:    args.Namespaces,
+		appClassName:  args.AppClassName,
+		maxPerZone:    defaultMaxZoneClasses,    // TODO: make it configurable via plugin args
+		maxPerSegment: defaultMaxSegmentClasses, // TODO: make it configurable via plugin args
 	}
 	return ac, nil
 }
@@ -195,6 +219,9 @@ func (ac *AppClass) PreFilter(ctx context.Context, state *framework.CycleState, 
 	// Get AppClass Name
 	appClassName := util.GetClassName(agName, networkawareutil.GetPodAppGroupSelector(pod), appClassCR)
 
+	// Get Global AppClass Name
+	globalAppClassName := util.GetAGClassName(agName, appClassCR)
+
 	// Get all pods that have the AppGroup label
 	req, err := labels.NewRequirement(agv1alpha1.AppGroupLabel, selection.Exists, nil)
 	if err != nil {
@@ -236,13 +263,17 @@ func (ac *AppClass) PreFilter(ctx context.Context, state *framework.CycleState, 
 			"Selector", p.Selector,
 			"ReplicaID", p.ReplicaID,
 			"Hostname", p.Hostname,
+			"AGClassName", p.AGClassName,
 			"ClassName", p.ClassName,
 		)
 	}
 
 	// Based on scheduling list check satisfied (same class, affinity) and violated (different class, anti-affinity)
-	satisfiedMap := make(map[string]int64)
-	violatedMap := make(map[string]int64)
+	workloadSatisfiedMap := make(map[string]int64)
+	workloadViolatedMap := make(map[string]int64)
+
+	globalSatisfiedMap := make(map[string]int64)
+	globalViolatedMap := make(map[string]int64)
 
 	// Get all nodes
 	nodeList, err := ac.handle.SnapshotSharedLister().NodeInfos().List()
@@ -250,40 +281,107 @@ func (ac *AppClass) PreFilter(ctx context.Context, state *framework.CycleState, 
 		return nil, framework.NewStatus(framework.Error, fmt.Sprintf("Error getting the nodelist: %v", err))
 	}
 
+	zoneClassMap := make(map[string]map[string]bool)
+	segmentClassMap := make(map[string]map[string]bool)
+
 	for _, nodeInfo := range nodeList {
 		nodeName := nodeInfo.Node().Name
+		// retrieve zone and segment labels
+		zone := networkawareutil.GetNodeZone(nodeInfo.Node())
+		segment := networkawareutil.GetNodeSegment(nodeInfo.Node())
+		klog.V(6).InfoS("Node info",
+			"name", nodeInfo.Node().Name,
+			"zone", zone,
+			"segment", segment)
+
 		var satisfied, violated int64
+		var globalSatisfied, globalViolated int64
+		classSet := make(map[string]bool)
+		globalClassSet := make(map[string]bool)
 
 		for _, p := range scheduledList {
 			if p.Hostname != nodeName || p.ClassName == "" {
 				continue
 			}
 
+			// For workload class
+			classSet[p.ClassName] = true
 			if p.ClassName == appClassName {
 				satisfied++
 			} else {
 				violated++
 			}
+
+			// For global class
+			globalClassSet[p.AGClassName] = true
+			if p.AGClassName == globalAppClassName {
+				globalSatisfied++
+			} else {
+				globalViolated++
+			}
 		}
 
-		satisfiedMap[nodeName] = satisfied
-		violatedMap[nodeName] = violated
+		workloadSatisfiedMap[nodeName] = satisfied
+		workloadViolatedMap[nodeName] = violated
+		globalSatisfiedMap[nodeName] = globalSatisfied
+		globalViolatedMap[nodeName] = globalViolated
+
+		// Update zone/segment maps
+		if zone != "" {
+			if _, ok := zoneClassMap[zone]; !ok {
+				zoneClassMap[zone] = make(map[string]bool)
+			}
+			for c := range classSet {
+				zoneClassMap[zone][c] = true
+			}
+		}
+		if segment != "" {
+			if _, ok := segmentClassMap[segment]; !ok {
+				segmentClassMap[segment] = make(map[string]bool)
+			}
+			for c := range classSet {
+				segmentClassMap[segment][c] = true
+			}
+		}
 	}
 
 	// Print satisfiedMap[nodeName] and violatedMap[nodeName]
-	for n, satisfied := range satisfiedMap {
-		klog.V(6).Infof("Node=%s, satisfied=%d, violated=%d", n, satisfied, violatedMap[n])
+	for n, satisfied := range workloadSatisfiedMap {
+		klog.V(6).Infof("Node=%s, satisfied=%d, violated=%d", n, satisfied, workloadViolatedMap[n])
+	}
+
+	// --- Logging consistency per zone and segment ---
+	for zone, classes := range zoneClassMap {
+		if len(classes) > 1 {
+			klog.V(4).Infof("Zone %s hosts multiple global classes: %v", zone, classes)
+		} else {
+			klog.V(6).Infof("Zone %s is consistent: %v", zone, classes)
+		}
+	}
+
+	for segment, classes := range segmentClassMap {
+		if len(classes) > 1 {
+			klog.V(4).Infof("Segment %s hosts multiple global classes: %v", segment, classes)
+		} else {
+			klog.V(6).Infof("Segment %s is consistent: %v", segment, classes)
+		}
 	}
 
 	// Update PreFilter State
 	preFilterState = &PreFilterState{
-		scoreEqually:  score,
-		agName:        agName,
-		appClass:      appClassCR,
-		appGroup:      appGroupCR,
-		scheduledList: scheduledList,
-		satisfiedMap:  satisfiedMap,
-		violatedMap:   violatedMap,
+		scoreEqually:         score,
+		agName:               agName,
+		appClass:             appClassCR,
+		appGroup:             appGroupCR,
+		workloadClassName:    appClassName,
+		globalClassName:      globalAppClassName,
+		scheduledList:        scheduledList,
+		workloadSatisfiedMap: workloadSatisfiedMap,
+		workloadViolatedMap:  workloadViolatedMap,
+		globalSatisfiedMap:   globalSatisfiedMap,
+		globalViolatedMap:    globalViolatedMap,
+		zoneClassMap:         zoneClassMap,
+		segmentClassMap:      segmentClassMap,
 	}
 
 	state.Write(preFilterStateKey, preFilterState)
@@ -341,14 +439,43 @@ func (ac *AppClass) Filter(ctx context.Context, cycleState *framework.CycleState
 		return framework.NewStatus(framework.Error, "not eligible due to failed to read from cycleState")
 	}
 
-	// Check violated count for this node
+	// Check violated workload classes for this node
 	if len(preFilterState.scheduledList) != 0 {
-		klog.V(6).InfoS("Checking the number of violated dependencies... ")
-		violated := preFilterState.violatedMap[nodeInfo.Node().Name]
+		klog.V(6).InfoS("Checking the number of violated workload classes... ")
+		violated := preFilterState.workloadViolatedMap[nodeInfo.Node().Name]
 		if violated > 0 {
-			// Node has conflicting classes → pod cannot be scheduled here
+			// Node has conflicting workload classes → pod cannot be scheduled here
 			return framework.NewStatus(framework.Unschedulable,
-				fmt.Sprintf("Node %v does not meet requirements. Violated: %v", nodeInfo.Node().Name, violated))
+				fmt.Sprintf("Node %v does not meet requirements. Workload Violated: %v", nodeInfo.Node().Name, violated))
+		}
+	}
+
+	// Check violated global classes for this node
+	if len(preFilterState.scheduledList) != 0 {
+		klog.V(6).InfoS("Checking the number of violated global classes... ")
+		violated := preFilterState.globalViolatedMap[nodeInfo.Node().Name]
+		if violated > 0 {
+			// Node has conflicting global classes → pod cannot be scheduled here
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("Node %v does not meet requirements. Global Violated: %v", nodeInfo.Node().Name, violated))
+		}
+	}
+
+	// Zone-level check - workload classes
+	zone := networkawareutil.GetNodeZone(nodeInfo.Node())
+	if zone != "" { // check if zone exists
+		if classMap, ok := preFilterState.zoneClassMap[zone]; ok && len(classMap) > ac.maxPerZone {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("Zone %v hosts multiple global classes: %v", zone, classMap))
+		}
+	}
+
+	// Segment-level check - workload classes
+	segment := networkawareutil.GetNodeSegment(nodeInfo.Node())
+	if segment != "" { // check if segment exists
+		if classMap, ok := preFilterState.segmentClassMap[segment]; ok && len(classMap) > ac.maxPerSegment {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("Segment %v hosts multiple global classes: %v", segment, classMap))
 		}
 	}
 
@@ -374,10 +501,19 @@ func (ac *AppClass) Score(ctx context.Context,
 		return score, framework.NewStatus(framework.Success, "scoreEqually enabled: minimum score")
 	}
 
-	// Return satisfied value as score
-	score = preFilterState.satisfiedMap[nodeName]
-	klog.V(4).InfoS("Score:", "pod", pod.GetName(), "node", nodeName, "finalScore", score)
-	return score, framework.NewStatus(framework.Success, "Satisfied value added as score")
+	// Add workload and global satisfied to score
+	workloadScore := preFilterState.workloadSatisfiedMap[nodeName]
+	globalScore := preFilterState.globalSatisfiedMap[nodeName]
+	score = workloadScore + globalScore
+
+	klog.V(4).InfoS("Score:",
+		"pod", pod.GetName(),
+		"node", nodeName,
+		"workloadScore", workloadScore,
+		"globalScore", globalScore,
+		"finalScore", score)
+
+	return score, framework.NewStatus(framework.Success, "Satisfied values added as score")
 }
 
 // NormalizeScore : normalize scores
@@ -385,7 +521,8 @@ func (ac *AppClass) NormalizeScore(ctx context.Context,
 	state *framework.CycleState,
 	pod *corev1.Pod,
 	scores framework.NodeScoreList) *framework.Status {
-	klog.V(4).InfoS("before normalization: ", "scores", scores)
+	before, _ := json.MarshalIndent(scores, "", "  ")
+	klog.V(4).Infof("%s:%s", "Before normalization", string(before))
 
 	// Get Min and Max Scores
 	minScore, maxScore := getMinMaxScores(scores)
@@ -401,7 +538,8 @@ func (ac *AppClass) NormalizeScore(ctx context.Context,
 		}
 	}
 
-	klog.V(4).InfoS("after normalization: ", "scores", scores)
+	after, _ := json.MarshalIndent(scores, "", "  ")
+	klog.V(4).Infof("%s:%s", "After normalization", string(after))
 	return nil
 }
 

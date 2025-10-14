@@ -30,6 +30,9 @@ type ScheduledInfo struct {
 	// Pod AppGroup Name
 	AgName string
 
+	// AGClassName is the Global className of the AppGroup
+	AGClassName string
+
 	// className of Pod from AppClass CR
 	ClassName string
 
@@ -56,6 +59,8 @@ func GetScheduledList(pods []*v1.Pod, appClassCR *appclassv1alpha1.AppClass) Sch
 				Name:     p.Name,
 				AgName:   networkawareutil.GetPodAppGroupLabel(p),
 				Selector: networkawareutil.GetPodAppGroupSelector(p),
+				AGClassName: GetAGClassName(networkawareutil.GetPodAppGroupLabel(p),
+					appClassCR),
 				ClassName: GetClassName(networkawareutil.GetPodAppGroupLabel(p),
 					networkawareutil.GetPodAppGroupSelector(p),
 					appClassCR),
@@ -74,8 +79,13 @@ func GetClassName(agName, selector string, appClassCR *appclassv1alpha1.AppClass
 	if len(appClassCR.Status.ApplicationClasses) > 0 {
 		for _, class := range appClassCR.Status.ApplicationClasses {
 			for _, appInfo := range class.AppInfos {
-				if agName == appInfo.AppGroup && selector == appInfo.Namespace {
-					return class.Name
+				if agName == appInfo.AppGroup {
+					// check each workload
+					for _, wl := range appInfo.AppGroupWorkloads {
+						if selector == wl {
+							return class.Name
+						}
+					}
 				}
 			}
 		}
@@ -84,11 +94,36 @@ func GetClassName(agName, selector string, appClassCR *appclassv1alpha1.AppClass
 	// Fallback to spec
 	for _, class := range appClassCR.Spec.ApplicationClasses {
 		for _, workload := range class.AppGroupWorkloads {
-			if agName == workload.AppGroup && selector == workload.Namespace {
-				return class.Name
+			if agName == workload.AppGroup {
+				for _, wl := range workload.AppGroupWorkloads {
+					if selector == wl {
+						return class.Name
+					}
+				}
 			}
 		}
 	}
 
+	return ""
+}
+
+func GetAGClassName(agName string, appClassCR *appclassv1alpha1.AppClass) string {
+	// Prefer the Status section if available
+	if appClassCR.Status.GlobalClassification.AppGroups != nil {
+		for _, ag := range appClassCR.Status.GlobalClassification.AppGroups {
+			if ag.Name == agName {
+				return ag.Class
+			}
+		}
+	}
+
+	// Fallback to Spec if Status is not populated
+	if appClassCR.Spec.GlobalClassification.AppGroups != nil {
+		for _, ag := range appClassCR.Spec.GlobalClassification.AppGroups {
+			if ag.AppGroup == agName {
+				return ag.Class
+			}
+		}
+	}
 	return ""
 }

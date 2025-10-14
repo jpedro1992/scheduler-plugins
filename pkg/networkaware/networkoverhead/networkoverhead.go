@@ -18,6 +18,7 @@ package networkoverhead
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/resource"
 	klog "k8s.io/klog/v2"
@@ -418,12 +419,12 @@ func (no *NetworkOverhead) Filter(ctx context.Context,
 	zone := networkawareutil.GetNodeZone(nodeInfo.Node())
 	segment := networkawareutil.GetNodeSegment(nodeInfo.Node())
 
-	intraZoneStatistics := preFilterState.statisticsMap[networkawareutil.StatisticsKey{
+	intraZoneStatistics, okZone := preFilterState.statisticsMap[networkawareutil.StatisticsKey{
 		Origin:         zone,
 		TypeStatistics: Intra,
 	}]
 
-	intraSegmentStatistics := preFilterState.statisticsMap[networkawareutil.StatisticsKey{
+	intraSegmentStatistics, okSegment := preFilterState.statisticsMap[networkawareutil.StatisticsKey{
 		Origin:         segment,
 		TypeStatistics: Intra,
 	}]
@@ -438,56 +439,62 @@ func (no *NetworkOverhead) Filter(ctx context.Context,
 	klog.V(6).InfoS("Segment IntraStatistics:", "segment", segment, "minBandwidth", intraSegmentStatistics.MinBandwidth, "avgCost", intraSegmentStatistics.AvgCost)
 
 	// Zone Filtering functions
-	// The pod is filtered out if AppGroup min bandwidth is higher than min bandwidth of zone
-	if avgBandwidth.Cmp(intraZoneStatistics.MinBandwidth) == 1 {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Appgroup bandwidth requirements. Zone: %v workload: %v.", nodeInfo.Node().Name, zone, intraZoneStatistics.MinBandwidth, avgBandwidth))
-	}
-
-	// The pod is filtered out if AppGroup avg cost is lower than avgCost of zone
-	if avgCost <= intraZoneStatistics.AvgCost {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Appgroup cost requirements.", nodeInfo.Node().Name, zone))
-	}
-
-	// The pod is filtered out if Workload avg bandwidth is higher than min bandwidth of zone
-	if workloadStatistics.AvgBandwidth.Cmp(intraZoneStatistics.MinBandwidth) == 1 {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Workload bandwidth requirements.", nodeInfo.Node().Name, zone))
-	}
-
-	// The pod is filtered out if AppGroup avg cost is lower than avgCost of zone
-	if intraZoneStatistics.AvgCost != 0 && workloadStatistics.AvgCost != 0 {
-		if workloadStatistics.AvgCost <= intraZoneStatistics.AvgCost {
+	// Only apply zone-based filtering if the segment label exists and statistics are available
+	if zone != "" && okZone {
+		// The pod is filtered out if AppGroup min bandwidth is higher than min bandwidth of zone
+		if avgBandwidth.Cmp(intraZoneStatistics.MinBandwidth) == 1 {
 			return framework.NewStatus(framework.Unschedulable,
-				fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Workload cost requirements. Zone: %v workload: %v.", nodeInfo.Node().Name, zone, intraZoneStatistics.AvgCost, workloadStatistics.AvgCost))
+				fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Appgroup bandwidth requirements. Zone: %v workload: %v.", nodeInfo.Node().Name, zone, intraZoneStatistics.MinBandwidth, avgBandwidth))
+		}
+
+		// The pod is filtered out if AppGroup avg cost is lower than avgCost of zone
+		if avgCost <= intraZoneStatistics.AvgCost {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Appgroup cost requirements.", nodeInfo.Node().Name, zone))
+		}
+
+		// The pod is filtered out if Workload avg bandwidth is higher than min bandwidth of zone
+		if workloadStatistics.AvgBandwidth.Cmp(intraZoneStatistics.MinBandwidth) == 1 {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Workload bandwidth requirements.", nodeInfo.Node().Name, zone))
+		}
+
+		// The pod is filtered out if AppGroup avg cost is lower than avgCost of zone
+		if intraZoneStatistics.AvgCost != 0 && workloadStatistics.AvgCost != 0 {
+			if workloadStatistics.AvgCost <= intraZoneStatistics.AvgCost {
+				return framework.NewStatus(framework.Unschedulable,
+					fmt.Sprintf("IntraStatistics - Node %v zone %v does not meet Workload cost requirements. Zone: %v workload: %v.", nodeInfo.Node().Name, zone, intraZoneStatistics.AvgCost, workloadStatistics.AvgCost))
+			}
 		}
 	}
 
 	// Segment Filtering functions
-	// The pod is filtered out if AppGroup min bandwidth is higher than min bandwidth of segment
-	if avgBandwidth.Cmp(intraSegmentStatistics.MinBandwidth) == 1 {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Appgroup bandwidth requirements. Segment: %v workload: %v.", nodeInfo.Node().Name, segment, intraSegmentStatistics.MinBandwidth, avgBandwidth))
-	}
-
-	// The pod is filtered out if AppGroup avg cost is lower than avgCost of segment
-	if avgCost <= intraSegmentStatistics.AvgCost {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Appgroup cost requirements.", nodeInfo.Node().Name, segment))
-	}
-
-	// The pod is filtered out if Workload avg bandwidth is higher than min bandwidth of zone
-	if workloadStatistics.AvgBandwidth.Cmp(intraSegmentStatistics.MinBandwidth) == 1 {
-		return framework.NewStatus(framework.Unschedulable,
-			fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Workload bandwidth requirements.", nodeInfo.Node().Name, segment))
-	}
-
-	// The pod is filtered out if AppGroup avg cost is lower than avgCost of segment
-	if intraSegmentStatistics.AvgCost != 0 && workloadStatistics.AvgCost != 0 {
-		if workloadStatistics.AvgCost <= intraSegmentStatistics.AvgCost {
+	// Only apply segment-based filtering if the segment label exists and statistics are available
+	if segment != "" && okSegment {
+		// The pod is filtered out if AppGroup min bandwidth is higher than min bandwidth of segment
+		if avgBandwidth.Cmp(intraSegmentStatistics.MinBandwidth) == 1 {
 			return framework.NewStatus(framework.Unschedulable,
-				fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Workload cost requirements. Segment: %v workload: %v.", nodeInfo.Node().Name, segment, intraSegmentStatistics.AvgCost, workloadStatistics.AvgCost))
+				fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Appgroup bandwidth requirements. Segment: %v workload: %v.", nodeInfo.Node().Name, segment, intraSegmentStatistics.MinBandwidth, avgBandwidth))
+		}
+
+		// The pod is filtered out if AppGroup avg cost is lower than avgCost of segment
+		if avgCost <= intraSegmentStatistics.AvgCost {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Appgroup cost requirements.", nodeInfo.Node().Name, segment))
+		}
+
+		// The pod is filtered out if Workload avg bandwidth is higher than min bandwidth of zone
+		if workloadStatistics.AvgBandwidth.Cmp(intraSegmentStatistics.MinBandwidth) == 1 {
+			return framework.NewStatus(framework.Unschedulable,
+				fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Workload bandwidth requirements.", nodeInfo.Node().Name, segment))
+		}
+
+		// The pod is filtered out if AppGroup avg cost is lower than avgCost of segment
+		if intraSegmentStatistics.AvgCost != 0 && workloadStatistics.AvgCost != 0 {
+			if workloadStatistics.AvgCost <= intraSegmentStatistics.AvgCost {
+				return framework.NewStatus(framework.Unschedulable,
+					fmt.Sprintf("IntraStatistics - Node %v segment %v does not meet Workload cost requirements. Segment: %v workload: %v.", nodeInfo.Node().Name, segment, intraSegmentStatistics.AvgCost, workloadStatistics.AvgCost))
+			}
 		}
 	}
 
@@ -514,7 +521,14 @@ func (no *NetworkOverhead) Score(ctx context.Context,
 	}
 
 	// Return Accumulated Cost as score
-	score = preFilterState.finalCostMap[nodeName]
+	if nodeScore, ok := preFilterState.finalCostMap[nodeName]; ok {
+		score = nodeScore
+	} else {
+		klog.V(4).InfoS("Node not found in finalCostMap, returning max score before normalization", "node", nodeName)
+		// Penalize the node since topology labels might be missing
+		score = framework.MaxNodeScore
+	}
+
 	klog.V(4).InfoS("Score:", "pod", pod.GetName(), "node", nodeName, "finalScore", score)
 	return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 }
@@ -524,7 +538,8 @@ func (no *NetworkOverhead) NormalizeScore(ctx context.Context,
 	state *framework.CycleState,
 	pod *corev1.Pod,
 	scores framework.NodeScoreList) *framework.Status {
-	klog.V(4).InfoS("before normalization: ", "scores", scores)
+	before, _ := json.MarshalIndent(scores, "", "  ")
+	klog.V(4).Infof("%s:%s", "Before normalization", string(before))
 
 	// Get Min and Max Scores to normalize between framework.MaxNodeScore and framework.MinNodeScore
 	minCost, maxCost := getMinMaxScores(scores)
@@ -546,7 +561,8 @@ func (no *NetworkOverhead) NormalizeScore(ctx context.Context,
 			scores[i].Score = framework.MaxNodeScore - int64(normCost)
 		}
 	}
-	klog.V(4).InfoS("after normalization: ", "scores", scores)
+	after, _ := json.MarshalIndent(scores, "", "  ")
+	klog.V(4).Infof("%s:%s", "After normalization", string(after))
 	return nil
 }
 
